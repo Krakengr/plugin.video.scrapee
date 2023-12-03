@@ -71,7 +71,7 @@ def changelog():
 def previous_changelogs():
     try:
         import requests
-        previous_changelogs_link = 'https://raw.githubusercontent.com/jewbmx/repo/master/zips/plugin.video.scrubsv2/previous_changelogs.txt'
+        previous_changelogs_link = 'https://raw.githubusercontent.com/Krakengr/plugin.video.scrapee-/main/previous_changelogs.txt'
         previous_changelogs_html = requests.get(previous_changelogs_link).text
         control.textViewer2(previous_changelogs_html, ChangeLog_head)
     except:
