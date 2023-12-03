@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<addon id="plugin.video.scrapee" version="0.2" name="[COLOR orange]Scrapee[/COLOR]" provider-name="AkisMpo">
+    <requires>
+        <import addon="script.module.six" />
+        <import addon="script.module.kodi-six" />
+        <import addon="script.module.simplejson" />
+		<import addon="script.module.cloudscraper" />
+		<import addon="plugin.video.youtube" optional="true" />
+		<import addon="script.scrubsv2.artwork" optional="true" />
+    </requires>
+    <extension point="xbmc.python.pluginsource" library="default.py">
+        <provides>video</provides>
+    </extension>
+    <extension point="xbmc.addon.metadata">
+		<news>
+			v 0.2 - 15.11.2023 - New settings added; Bugs fixed
+			v 0.1 - 01.11.2023 - Initial Release
+		</news>
+		<summary lang="el_GR">Scraper Ταινιών και Τηλεοπτικών Σειρών</summary>
+		<summary lang="en_US">Movies and TV Series Scraper</summary>
+		<description lang="el_GR">Αυτό το πρόγραμμα συλλέγει πληροφορίες από ιστοσελίδες που περιέχουν ταινίες ή/και σειρές με ελληνικούς και αγγλικούς υπότιτλους.</description>
+		<description lang="en_US">This program collects information from websites that contain movies and/or tv shows with Greek and English subtitles.</description>
+		<disclaimer>
+		</disclaimer>	
+		<platform>all</platform>
+		<license>http://www.gnu.org/licenses/</license>
+		<forum></forum>
+		<website></website>    
+		<email></email>
+		<mainsource></mainsource>    
+		<source></source> 		
+		<assets>
+			<icon>resources/images/icon.png</icon>
+			<fanart>resources/images/back.jpg</fanart>
+		</assets>
+	</extension>
+</addon>

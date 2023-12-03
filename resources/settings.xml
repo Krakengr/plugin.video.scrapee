@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+
+<settings>
+
+    <category label="General Settings">
+        <setting type="lsep" label="Appearance" />
+        <setting id="theme.alt" type="action" label="Theme" default="-" option="close" action="RunPlugin(plugin://plugin.video.scrapee/?action=artwork)" visible="!System.HasAddon(script.scrubsv2.artwork)" />
+        <setting id="show.artwork" type="bool" label="Theme Artwork PopUp" default="true" enable="!eq(-1,true)" visible="!System.HasAddon(script.scrubsv2.artwork)" />
+        <setting id="theme.1" type="select" label="Theme" values="Grey|Purple" default="Purple" visible="System.HasAddon(script.scrubsv2.artwork)" />
+        <setting id="info.language" type="select" label="Info Language (Titles/Description)" values="English|Greek" default="English" />
+        <setting id="show.changelog" type="bool" label="Show ChangeLog After Updates" default="false" />
+        <setting id="show.noyear" type="bool" label="Show Items Without/Future Year/AirDate" default="false" />
+        <setting id="indicators.alt" type="enum" label="Indicators" values="Local|StreamDB" default="1" visible="!eq(-4,)" />
+        <setting id="items.per.page" type="slider" label="Items Per Page" default="20" range="10,40" option="int" />
+        <setting id="trailers.youtube" type="bool" label="Use YouTube" default="false" enable="!eq(-2,false)" subsetting="true" visible="eq(-2,4)" />
+    </category>
+
+    <category label="Playback Settings">
+        <setting type="lsep" label="When Playback Starts" />
+        <setting id="bookmarks" type="bool" label="Resume Playback" default="true" />
+        <setting id="bookmarks.auto" type="bool" label="Auto Resume" default="false" enable="!eq(-1,false)" subsetting="true" visible="eq(-1,true)" />
+        <setting id="bookmarks.source" type="enum" label="Resume Point Source:" values="Local|StreamDB" default="0" subsetting="true" visible="eq(-2,true)" />
+        <setting type="lsep" label="When Playback Ends" />
+        <setting id="crefresh" type="bool" label="Force Container Refresh/Watched Status" default="false" />
+        <setting type="lsep" label="Source Settings" />
+        <setting id="hosts.mode" type="enum" label="Default Action" values="Dialog|Directory|Auto Play" default="1" />
+        <setting id="progress.dialog" type="enum" label="Progress Dialog" values="Foreground|Background" default="0" />
+    </category>
+
+    <category label="Account Settings">
+        <setting type="lsep" label="StreamDB" />
+        <setting id="streamdb.api" type="text" label="API:" default="" />
+		<setting id="dontsendip" type="bool" label="Don't send my IP" default="false" />
+    </category>
+
+</settings>
+
+

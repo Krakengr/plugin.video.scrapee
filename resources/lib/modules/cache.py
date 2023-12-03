@@ -1,0 +1,510 @@
+# -*- coding: utf-8 -*-
+
+import re
+import os
+import time
+from os.path import exists
+
+import six
+from ast import literal_eval as evaluate
+import xml.etree.ElementTree as ET
+import simplejson as json
+from kodi_six import xbmc, xbmcgui
+import xbmcaddon
+from resources.lib.modules import control
+from resources.lib.modules import cloudscraper as cl
+from resources.lib.modules import log_utils
+
+try:
+    from sqlite3 import dbapi2 as db, Error
+except ImportError:
+    from pysqlite2 import dbapi2 as db, Error
+
+try:
+    from six.moves import urllib_request
+    urlopen = urllib_request.urlopen
+except ImportError:
+    import requests
+    urlopen = requests.Session()
+
+#21600 = 6hrs; default 3600 = 1 hour
+cache_time = 21600
+dialog = xbmcgui.Dialog()
+cache_table = 'cache'
+kodi_version = control.getKodiVersion()
+home = xbmcaddon.Addon().getAddonInfo('path')
+streamdbApi = control.setting('streamdb.api')
+
+def _delete_record(media_type, imdb, season = 0, episode = 0):
+    sql_delete = "DELETE FROM links WHERE imdb = '%s'" % imdb
+    if media_type == 'tv':
+        sql_delete += " AND season = %s AND episode = %s" % (season, episode)
+    dbcon = db.connect(control.cacheFile)
+    dbcur = dbcon.cursor()
+    try:
+        dbcur.execute(sql_delete)
+        dbcon.commit()
+    except Error as e:
+        xbmc.log('sql_match error : ' + str(e), xbmc.LOGINFO)
+        pass
+
+def add_link(link, media_type, imdb, season = 0, episode = 0):
+    now = int( time.time() )
+    control.makeFile(control.dataPath)
+    dbcon = db.connect(control.cacheFile)
+    dbcur = dbcon.cursor()
+    _delete_record(media_type, imdb, season, episode)
+    
+    try:
+        sql_insert = "INSERT INTO links VALUES ('%s', '%s', '%s', '%s', '%s', %s)" % (link, media_type, imdb, season, episode, now)
+        dbcur.execute(sql_insert)
+        dbcon.commit()
+    except Error as e:
+        #e
+        pass
+    
+def get_link(media_type, imdb, season = 0, episode = 0):
+    try:
+        now = int( time.time() )
+        time_added = (now - cache_time)
+        
+        sql_select = "SELECT url FROM links WHERE imdb = '%s'" % imdb
+        sql_delete = "DELETE FROM links WHERE imdb = '%s'" % imdb
+        
+        if media_type == 'tv':
+            sql_select += " AND season = '%s' AND episode = '%s'" % (season, episode)
+            sql_delete += " AND season = '%s' AND episode = '%s'" % (season, episode)
+
+        sql_select += " AND added > '%s'" % (time_added)
+
+        control.makeFile(control.dataPath)
+        dbcon = db.connect(control.cacheFile)
+        dbcur = dbcon.cursor()
+        dbcur.execute("CREATE TABLE IF NOT EXISTS links (""url TEXT, ""type TEXT, ""imdb TEXT, ""season TEXT, ""episode TEXT, ""added INTEGER,  ""UNIQUE(imdb, season, episode)"");")
+        dbcur.execute(sql_select)
+        match = dbcur.fetchone()
+        if match:
+            link = match[0]
+            return link
+        else:
+            #Delete the link
+            dbcur.execute(sql_delete)
+            return None
+    except:
+         return None
+
+def get_cache_file(name, url):
+    
+    filename    = name + '.json'
+    
+    if file_exists(filename) and file_time(filename):
+        data_json = open_cache(filename)
+    else:
+        try:
+            response    = urlopen(url) 
+            data_json   = json.loads(response.read())
+
+        except:
+            #dialog.ok('Error', 'Error getting data. Please try again later.')
+            pass
+        
+        write_cache(filename, data_json)
+    
+    return data_json
+
+def get_coverapi_data(imdb, type = 'movie'):
+    filename    = imdb + '.json'
+
+    if file_exists(filename, 'coverapi') and file_time(filename, 'coverapi'):
+        data_json = open_cache(filename, 'coverapi')
+    else:
+        get =   'https://coverapi.store/embed/' + imdb +'/'
+        d = cl.make_request(get)
+        if (d is None):
+            dialog.ok('Error', 'Error getting playlist info. Please try again later.')
+            pass
+
+        z = re.search(r"news_id:.+'(.*?)'", d)
+        
+        if (z is None):
+            dialog.ok('Error', 'Error getting playlist info. Please try again later.')
+            pass
+        
+        now         = int( time.time() )
+        news_id     = z.group(1)
+        
+        if (type == 'movie'):
+            list        = cl.post_request(news_id)
+            data_json   = json.loads(list)
+        
+        else:
+            play_url    = 'https://coverapi.store/uploads/playlists/' + str(news_id) + '.txt?v=' + str(now)
+            list        = urlopen(play_url)
+            data_json   = json.loads(list.read())
+       
+        write_cache(filename, data_json, 'coverapi')
+    
+    return data_json
+
+def get_coverapi_file_link(imdb, season = '', episode = '', media_type = 'movie'):
+    data = get_coverapi_data(imdb, media_type)
+
+    file_link = None
+    
+    if media_type == 'movie':
+
+        if not 'html5' in data:
+            pass
+                
+        file_link = get_link(media_type, imdb, season, episode)
+
+        if file_link == None:
+
+            file = data['html5']
+            z = re.search(r"file:"'(.*?)'",", file)
+                    
+            if (z is None):
+                pass
+                    
+            file_link = z.group(1)
+            file_link = file_link.strip('\"')
+    
+    return file_link
+
+def file_exists(name, folder = ''):
+    file_folder = 'resources/cache/'
+
+    if ( folder != ''):
+        file_folder += folder + '/'
+
+    file_folder += name
+
+    file_path = os.path.join(home, file_folder )
+
+    if exists(file_path):
+        return True
+    else:
+        return False
+    
+def file_time(name, folder = ''):
+    file_folder = 'resources/cache/'
+
+    if ( folder != ''):
+        file_folder += folder + '/'
+
+    file_folder += name
+
+    file_path = os.path.join(home, file_folder)
+
+    if not os.path.exists(file_path):
+        return False
+    
+    now = int( time.time() )
+
+    if os.path.getmtime(file_path) > (now - cache_time):
+        return True
+    else:
+        return False
+
+def open_cache(name, folder = ''):
+    file_folder = 'resources/cache/'
+
+    if ( folder != ''):
+        file_folder += folder + '/'
+
+    file_folder += name
+
+    file_path = os.path.join(home, file_folder)
+
+    if not os.path.exists(file_path):
+        return None
+    
+    return json.load(open(file_path))
+
+def write_cache(name, data, folder = ''):
+    file_folder = 'resources/cache/'
+
+    if ( folder != ''):
+        file_folder += folder + '/'
+
+    file_folder += name
+
+    file_path = os.path.join(home, file_folder)
+
+    if os.path.exists(file_path):
+        os.remove(file_path)
+    
+    with open(file_path, 'w') as f:
+        json.dump(data, f)
+
+def _is_cache_valid(cached_time, cache_timeout):
+    now = int(time.time())
+    diff = now - cached_time
+    return (cache_timeout * cache_time) > diff
+
+def cache_clear_search(select):
+    try:
+        cursor = _get_connection_cursor_search()
+        if select == 'all':
+            table = ['movies', 'tvshow', 'people', 'yt', 'keywords', 'companies', 'collections']
+        elif not isinstance(select, list):
+            table = [select]
+        for t in table:
+            try:
+                cursor.execute("DROP TABLE IF EXISTS %s" % t)
+                cursor.execute("VACUUM")
+                cursor.commit()
+            except:
+                pass
+    except:
+        pass
+
+def _get_connection_search():
+    control.makeFile(control.dataPath)
+    conn = db.connect(control.searchFile)
+    conn.row_factory = _dict_factory
+    return conn
+
+def _get_connection_bookmarks():
+    control.makeFile(control.dataPath)
+    conn = db.connect(control.bookmarksFile)
+    conn.row_factory = _dict_factory
+    return conn
+
+def _get_connection_history():
+    control.makeFile(control.dataPath)
+    conn = db.connect(control.historyFile)
+    conn.row_factory = _dict_factory
+    return conn
+
+def _get_connection_links():
+    control.makeFile(control.dataPath)
+    conn = db.connect(control.cacheFile)
+    conn.row_factory = _dict_factory
+    return conn
+
+def _get_connection_favorites():
+    control.makeFile(control.dataPath)
+    conn = db.connect(control.favoritesFile)
+    conn.row_factory = _dict_factory
+    return conn
+
+def _get_connection_likes():
+    control.makeFile(control.dataPath)
+    conn = db.connect(control.likesFile)
+    conn.row_factory = _dict_factory
+    return conn
+
+def _get_connection_cursor_search():
+    conn = _get_connection_search()
+    return conn.cursor()
+
+def _get_connection_cursor_bookmarks():
+    conn = _get_connection_bookmarks()
+    return conn.cursor()
+
+def _get_connection_cursor_links():
+    conn = _get_connection_links()
+    return conn.cursor()
+
+def _get_connection_cursor_history():
+    conn = _get_connection_history()
+    return conn.cursor()
+
+def _get_connection_cursor_favorites():
+    conn = _get_connection_favorites()
+    return conn.cursor()
+
+def _get_connection_cursor_likes():
+    conn = _get_connection_likes()
+    return conn.cursor()
+
+def _generate_md5(*args):
+    md5_hash = hashlib.md5()
+    [md5_hash.update(six.ensure_binary(arg, errors='replace')) for arg in args]
+    return str(md5_hash.hexdigest())
+
+
+def _get_function_name(function_instance):
+    return re.sub('.+\smethod\s|.+function\s|\sat\s.+|\sof\s.+', '', repr(function_instance))
+
+
+def _hash_function(function_instance, *args):
+    return _get_function_name(function_instance) + _generate_md5(args)
+
+
+def _dict_factory(cursor, row):
+    d = {}
+    for idx, col in enumerate(cursor.description):
+        d[col[0]] = row[idx]
+    return d
+
+def cache_clear_all():
+    cache_clear()
+    cache_clear_providers()
+    cache_clear_links()
+
+def cache_clear_links():
+    try:
+        cursor = _get_connection_cursor_links()
+        cursor.execute("DROP TABLE IF EXISTS %s" % 'links')
+        cursor.execute("VACUUM")
+        cursor.commit()
+    except:
+        pass
+
+def clean_history():
+    try:
+        cursor = _get_connection_cursor_bookmarks()
+        cursor.execute("DROP TABLE IF EXISTS %s" % 'bookmarks')
+        cursor.execute("VACUUM")
+        cursor.commit()
+    except:
+        pass
+
+    try:
+        cursor = _get_connection_cursor_history()
+
+        table = ['movie', 'tv']
+        for t in table:
+            try:
+                cursor.execute("DROP TABLE IF EXISTS %s" % t)
+                cursor.execute("VACUUM")
+                cursor.commit()
+            except:
+                pass
+
+        cursor.execute("DROP TABLE IF EXISTS %s" % 'bookmarks')
+        cursor.execute("VACUUM")
+        cursor.commit()
+    except:
+        pass
+    
+    if streamdbApi != '' and len(streamdbApi) > 0:
+        updlink  = 'https://streamdb.homebrewgr.info/index.php?action=remove-history&api_key=%s' % (streamdbApi)
+        try:
+            urlopen(updlink)
+        except:
+            xbmc.log('Something went wrong (history link)', xbmc.LOGINFO)
+    
+def clean_favorites():
+    try:
+        cursor = _get_connection_cursor_favorites()
+        table = ['movie', 'tv']
+        for t in table:
+            try:
+                cursor.execute("DROP TABLE IF EXISTS %s" % t)
+                cursor.execute("VACUUM")
+                cursor.commit()
+            except:
+                pass
+    except:
+        pass
+    
+    if streamdbApi != '' and len(streamdbApi) > 0:
+        updlink  = 'https://streamdb.homebrewgr.info/index.php?action=remove-favorites&api_key=%s' % (streamdbApi)
+        try:
+            urlopen(updlink)
+        except:
+            xbmc.log('Something went wrong (favorites link)', xbmc.LOGINFO)
+
+def clean_likes():
+    try:
+        cursor = _get_connection_cursor_likes()
+        table = ['movie', 'tv']
+        for t in table:
+            try:
+                cursor.execute("DROP TABLE IF EXISTS %s" % t)
+                cursor.execute("VACUUM")
+                cursor.commit()
+            except:
+                pass
+    except:
+        pass
+
+    if streamdbApi != '' and len(streamdbApi) > 0:
+        updlink  = 'https://streamdb.homebrewgr.info/index.php?action=remove-likes&api_key=%s' % (streamdbApi)
+        try:
+            urlopen(updlink)
+        except:
+            xbmc.log('Something went wrong (likes link)', xbmc.LOGINFO)
+
+def cache_clear_providers():
+    file_folder = 'resources/cache/coverapi/'
+    file_path = os.path.join(home, file_folder)
+    filelist = [ f for f in os.listdir(file_path) if f.endswith(".json") ]
+
+    for f in filelist:
+        os.remove(os.path.join(file_path, f))
+
+def cache_clear():
+    file_folder = 'resources/cache/'
+
+    file_path = os.path.join(home, file_folder)
+
+    filelist = [ f for f in os.listdir(file_path) if f.endswith(".json") ]
+
+    for f in filelist:
+        os.remove(os.path.join(file_path, f))
+
+def clean_settings():
+    current_user_settings = []
+    removed_settings = []
+    active_settings = []
+    def _make_content(dict_object):
+        if kodi_version >= 18:
+            content = '<settings version="2">'
+            for item in dict_object:
+                if item['id'] in active_settings:
+                    if 'default' in item and 'value' in item:
+                        content += '\n    <setting id="%s" default="%s">%s</setting>' % (item['id'], item['default'], item['value'])
+                    elif 'default' in item:
+                        content += '\n    <setting id="%s" default="%s"></setting>' % (item['id'], item['default'])
+                    elif 'value' in item:
+                        content += '\n    <setting id="%s">%s</setting>' % (item['id'], item['value'])
+                    else:
+                        content += '\n    <setting id="%s"></setting>'
+                else:
+                    removed_settings.append(item)
+        else:
+            content = '<settings>'
+            for item in dict_object:
+                if item['id'] in active_settings:
+                    if 'value' in item:
+                        content += '\n    <setting id="%s" value="%s" />' % (item['id'], item['value'])
+                    else:
+                        content += '\n    <setting id="%s" value="" />' % item['id']
+                else:
+                    removed_settings.append(item)
+        content += '\n</settings>'
+        return content
+    try:
+        root = ET.parse(control.settingsPath).getroot()
+        for item in root.findall('./category/setting'):
+            setting_id = item.get('id')
+            if setting_id:
+                active_settings.append(setting_id)
+        root = ET.parse(control.settingsFile).getroot()
+        for item in root:
+            dict_item = {}
+            setting_id = item.get('id')
+            setting_default = item.get('default')
+            if kodi_version >= 18:
+                setting_value = item.text
+            else:
+                setting_value = item.get('value')
+            dict_item['id'] = setting_id
+            if setting_value:
+                dict_item['value'] = setting_value
+            if setting_default:
+                dict_item['default'] = setting_default
+            current_user_settings.append(dict_item)
+        new_content = _make_content(current_user_settings)
+        nfo_file = control.openFile(control.settingsFile, 'w')
+        nfo_file.write(new_content)
+        nfo_file.close()
+        control.infoDialog('Clean Settings: %s Old Settings Removed' % (str(len(removed_settings))))
+    except:
+        log_utils.log('clean_settings', 1)
+        control.infoDialog('Clean Settings: Error Cleaning Settings')
+        return
