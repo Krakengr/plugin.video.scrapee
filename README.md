@@ -1,2 +1,2 @@
-# plugin.video.scrapee-
-Scrapee is an addon for Kodi 
+# plugin.video.scrapee
+Scrapee is an all-in-one addon which allows you to watch your favorite movies and TV shows.
