@@ -1,7 +1,7 @@
 [B][COLOR grey]
 (Contact me about any errors or issues.)
 (Feel free to test anything and tell me what works and what dont.)
-(thunderlake@gmail.com OR https://github.com/jewbmx/repo/issues)[/COLOR][/B]
+(thunderlake@gmail.com OR https://github.com/Krakengr/plugin.video.scrapee-/issues)[/COLOR][/B]
 [Plugin is tested with: Kodi v20, older versions may don't work.]
 
 [B]- 0.2[/B] Added Movies section to avoid two different plugins. Fixed some bugs. Added some features.
