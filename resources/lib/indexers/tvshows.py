@@ -618,6 +618,7 @@ class tvshows:
             favitems = [i[0] for i in favitems]
         except:
             pass
+        
         for i in items:
             try:
                 if 'channel' in i:
@@ -642,22 +643,22 @@ class tvshows:
                 systitle = urllib_parse.quote_plus(title)
                 poster = i['poster_path']
                 seasons_meta = {'year': year, 'title': title, 'poster': poster, 'fanart': poster, 'descr': descr, 'banner': poster, 'clearlogo': poster, 'clearart': poster, 'landscape': 'landscape', 'mediatype': 'tv', 'code': tmdb, 'imdbnumber': imdb, 'imdb': imdb, 'tmdb': tmdb, 'tvdb': 0, 'tvshowtitle': i['title']}
-
-                sysmeta = urllib.parse.quote_plus(json.dumps(seasons_meta))
-
+                
+                sysmeta = urllib_parse.quote_plus(json.dumps(seasons_meta))
+                
                 meta = dict((k,v) for k, v in i.items() if not v == '0')
                 meta.update({'code': tmdb, 'imdbnumber': imdb, 'imdb_id': imdb, 'tmdb_id': tmdb, 'tvdb_id': 0})
                 meta.update({'mediatype': 'tvshow'})
                 meta.update({'tvshowtitle': i['title']})
                 
-                trailer_url = urllib.parse.quote(i['trailer']) if 'trailer' in i else '0'
+                trailer_url = urllib_parse.quote(i['trailer']) if 'trailer' in i else '0'
                 search_name = systitle
                 
                 if trailer_url == '0':
                     meta.update({'trailer': '%s?action=trailer&name=%s&imdb=%s&tmdb=%s' % (sysaddon, search_name, imdb, tmdb)})
                 else:
                     meta.update({'trailer': '%s?action=trailer&name=%s&url=%s&imdb=%s&tmdb=%s' % (sysaddon, search_name, trailer_url, imdb, tmdb)})
-
+                
                 if not 'duration' in meta: meta.update({'duration': '45'})
                 elif meta['duration'] == '0': meta.update({'duration': '45'})
                 try: meta.update({'duration': str(int(meta['duration']) * 60)})
@@ -701,7 +702,7 @@ class tvshows:
                 
                 try: item = control.item(label=label, offscreen=True)
                 except: item = control.item(label=label)
-
+                
                 art = {}
 
                 art.update({'icon': poster, 'thumb': poster, 'poster': poster, 'tvshow.poster': poster, 'season.poster': poster, 'banner': poster, 'landscape': poster})
@@ -723,7 +724,7 @@ class tvshows:
                 
                 if kodi_version < 20:
                     try: 
-                        item.setUniqueIDs({'imdb': imdb, 'tmdb': tmdb})
+                        item.setUniqueIDs({'imdb': imdb, 'tmdb': str(tmdb)})
                     except:
                         pass
                 
@@ -732,11 +733,14 @@ class tvshows:
 
                 if kodi_version >= 20:
                     info_tag = ListItemInfoTag(item, 'video')
-
+                
                 if kodi_version >= 20:
                     info_tag.set_info(control.metadataClean(meta))
                 else:
-                    item.setInfo(type='Video', infoLabels=control.metadataClean(meta))
+                    try:
+                        item.setInfo(type='Video', infoLabels=control.metadataClean(meta))
+                    except:
+                        pass
 
                 video_streaminfo = {'codec': 'h264'}
                 

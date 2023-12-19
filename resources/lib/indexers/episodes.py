@@ -39,18 +39,19 @@ class seasons:
     def get(self, tvshowtitle, year, imdb, tmdb, meta, idx=True, create_directory=True):
         try:
             data = cache.get_coverapi_data(imdb, 'tv')
-            
+            xbmc.log('data:' + str(data), xbmc.LOGINFO)
             if not 'playlist' in data:
                 raise Exception()
             i = 0
             
             for _item in data['playlist']:
                 i += 1
-
+                
                 #No seasons?
                 if 'playlist' not in _item.keys():
                     title = 'Season %s' % (i)
                     season = str(i)
+                    
                     self.list.append({'title': title, 'season': season, 'year': year, 'imdb': imdb, 'tmdb': tmdb, 'tvdb': '0', 'meta': meta})
                     break
                 

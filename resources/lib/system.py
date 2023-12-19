@@ -44,10 +44,15 @@ def router(_argv):
         from resources.lib.modules import favorites
         from resources.lib.modules import history
         from resources.lib.modules import likes
+        from resources.lib.modules import control
         bookmarks.syncdb()
         favorites.syncfdb()
         history.synchdb()
         likes.syncldb()
+
+        if not control.condVisibility('System.HasAddon(script.module.cloudscraper)'):
+            control.installAddon('script.module.cloudscraper')
+            
         navigator.navigator().moviesMenu()
     
     elif action == 'tvshows_menu':
@@ -56,10 +61,15 @@ def router(_argv):
         from resources.lib.modules import favorites
         from resources.lib.modules import history
         from resources.lib.modules import likes
+        from resources.lib.modules import control
         bookmarks.syncdb('tv')
         favorites.syncfdb('tv')
         history.synchdb('tv')
         likes.syncldb('tv')
+
+        if not control.condVisibility('System.HasAddon(script.module.cloudscraper)'):
+            control.installAddon('script.module.cloudscraper')
+
         navigator.navigator().tvshows()
     
     elif action == 'tv_search':

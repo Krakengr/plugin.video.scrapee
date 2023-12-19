@@ -21,7 +21,7 @@ except ImportError:
     from pysqlite2 import dbapi2 as db, Error
 
 try:
-    from six.moves import urllib_request
+    from six.moves import urllib_request, urllib_parse
     urlopen = urllib_request.urlopen
 except ImportError:
     import requests
@@ -102,7 +102,7 @@ def get_cache_file(name, url):
     else:
         try:
             response    = urlopen(url) 
-            data_json   = json.loads(response.read())
+            data_json   = json.loads(response.read().decode('utf-8'))
 
         except:
             #dialog.ok('Error', 'Error getting data. Please try again later.')
@@ -114,35 +114,85 @@ def get_cache_file(name, url):
 
 def get_coverapi_data(imdb, type = 'movie'):
     filename    = imdb + '.json'
-
+    
     if file_exists(filename, 'coverapi') and file_time(filename, 'coverapi'):
         data_json = open_cache(filename, 'coverapi')
+        
     else:
-        get =   'https://coverapi.store/embed/' + imdb +'/'
-        d = cl.make_request(get)
-        if (d is None):
-            dialog.ok('Error', 'Error getting playlist info. Please try again later.')
-            pass
+        data_json = None
 
-        z = re.search(r"news_id:.+'(.*?)'", d)
+        #Try to get this link from the links pool
+        if streamdbApi != '' and len(streamdbApi) > 0:
+            get_link  = 'https://streamdb.homebrewgr.info/index.php?action=get-link&api_key=%s&imdb=%s' % (streamdbApi, imdb)
+
+            try:
+                response  = urlopen(get_link)
+                
+                if six.PY2:
+                    import json as js
+                    
+                    try:
+                        data_tmp = js.loads(js.dumps(response.read().decode('utf-8')))
+                    except:
+                        data_tmp = js.loads(response.read())
+                
+                elif six.PY3:
+                    try:
+                        data_tmp = json.loads(response.read().decode('utf-8'))
+                    except:
+                        data_tmp = json.loads(response.read())
+                
+                if 'status' not in data_tmp or 'data' not in data_tmp:
+                    raise Exception()
+
+                data_json = json.loads(data_tmp["data"])
+                write_cache(filename, data_json, 'coverapi')
+
+            except:
+                pass
+    
+        if six.PY3 and data_json is None:
+
+            get =   'https://coverapi.store/embed/' + imdb +'/'
+            
+            d = cl.make_request(get)
+            if (d is None):
+                z = re.search(r"We think.*a robot", d)
+                
+                if (z is None):
+                    dialog.ok('Error', 'Error getting playlist info. Please try again later.')
+                else:
+                    dialog.ok('Error', 'You are temporarily IP banned from coverapi.store. Please try again later.')
+                
+                pass
+
+            z = re.search(r"news_id:.+'(.*?)'", d)
+            
+            if (z is None):
+                dialog.ok('Error', 'Error getting playlist info. Please try again later.')
+                pass
+            
+            now         = int( time.time() )
+            news_id     = z.group(1)
+            
+            if (type == 'movie'):
+                list        = cl.post_request(news_id)
+                data_json   = json.loads(list)
+            
+            else:
+                play_url    = 'https://coverapi.store/uploads/playlists/' + str(news_id) + '.txt?v=' + str(now)
+                list        = urlopen(play_url)
+                data_json   = json.loads(list.read())
         
-        if (z is None):
-            dialog.ok('Error', 'Error getting playlist info. Please try again later.')
-            pass
-        
-        now         = int( time.time() )
-        news_id     = z.group(1)
-        
-        if (type == 'movie'):
-            list        = cl.post_request(news_id)
-            data_json   = json.loads(list)
-        
-        else:
-            play_url    = 'https://coverapi.store/uploads/playlists/' + str(news_id) + '.txt?v=' + str(now)
-            list        = urlopen(play_url)
-            data_json   = json.loads(list.read())
-       
-        write_cache(filename, data_json, 'coverapi')
+            write_cache(filename, data_json, 'coverapi')
+
+            try:
+                add_link  = 'https://streamdb.homebrewgr.info/index.php?action=add-link&imdb=%s' % (imdb)
+                data = urllib_parse.urlencode({'type': type, 'data': data_json})
+                data = data.encode('ascii')
+                urllib_request.urlopen(add_link, data)
+            except:
+                pass
     
     return data_json
 

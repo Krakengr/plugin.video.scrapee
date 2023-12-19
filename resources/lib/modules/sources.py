@@ -51,55 +51,35 @@ class sources:
             return
         else:
             try:
+                data = None
+
                 #Check if the link is in the DB
                 file_link = cache.get_link(media_type, imdb, season, episode)
-                data_got = False
-
-                #Try to get this link from the links pool
-                if file_link is None:
-                    if streamdbApi != '' and len(streamdbApi) > 0:
-                        get_link  = 'https://streamdb.homebrewgr.info/index.php?action=get-link&api_key=%s&imdb=%s&se=%s&ep=%s' % (streamdbApi, imdb, season, episode)
-
-                        try:
-                            response  = urlopen(get_link)
-                            data_json = json.loads(response.read())
-                            
-                            if 'status' not in data_json or data_json["status"] != "OK" or 'link' not in data_json:
-                                raise Exception()
-
-                            file_link = data_json["link"]
-
-                            try:
-                                file_link = urllib.parse.unquote_plus(file_link)
-                            except:
-                                file_link = urllib.unquote(file_link)
-
-                            cache.add_link(file_link, media_type, imdb, season, episode)
-                        except:
-                            file_link = None
                 
-                #Try to get the link from coverapi 
+                #Try to get this link from the links pool
                 if file_link is None:
                     data = cache.get_coverapi_data(imdb, media_type)
 
+                #Got the data. Try to find the link(s).
+                if file_link is None and data is not None:
                     if media_type == 'movie':
                         
                         if not 'html5' in data:
                             raise Exception()
                         
-                        file_link = cache.get_link(media_type, imdb, season, episode)
-
-                        if file_link == None:
-
+                        try:
                             file = data['html5']
-                            z = re.search(r"file:"'(.*?)'",", file)
+                        except:
+                            file = data
                             
-                            if (z is None):
-                                raise Exception()
+                        z = re.search(r"file:"'(.*?)'",", file)
+
+                        if (z is None):
+                            raise Exception()
                             
-                            file_link = z.group(1)
-                            file_link = file_link.strip('\"')
-                            cache.add_link(file_link, media_type, imdb, season, episode)
+                        file_link = z.group(1)
+                        file_link = file_link.strip('\"')
+                        cache.add_link(file_link, media_type, imdb, season, episode)
 
                     elif media_type == 'tv':
                         
@@ -107,11 +87,6 @@ class sources:
                             raise Exception()
                         
                         file_link = fileurl
-                else:
-                    data_got = True
-
-                file_link = file_link.replace('https://', 'http://')
-
                 try:
                     upd_url = self.upd_link % (imdb)
                     
@@ -119,18 +94,9 @@ class sources:
                         upd_url  += '&noip=true'
 
                     urlopen(upd_url)
+                    control.sleep(100)
                 except:
                     pass
-
-                if not data_got and streamdbApi != '' and len(streamdbApi) > 0:
-                    add_link  = 'https://streamdb.homebrewgr.info/index.php?action=add-link&imdb=%s&se=%s&ep=%s' % (imdb, season, episode)
-                    try:
-                        add_link  += '&link=%s' % (urllib.parse.quote_plus(file_link))
-                        urlopen(add_link)
-                    except:
-                        add_link  += '&link=%s' % (urllib.quote(file_link))
-                        urlopen(add_link)
-                control.sleep(100)
             except:
                 dialog = xbmcgui.Dialog()
                 dialog.ok('Error', 'Error getting file URL. Please try again later.')
@@ -138,6 +104,7 @@ class sources:
         
         try:
             from resources.lib.modules.player import player
+            file_link = file_link.replace('https://', 'http://')
             player().run(title, year, season, episode, imdb, tmdb, tvdb, file_link, meta)
         except:
             log_utils.log('play', 1)
