@@ -1,1 +1,2 @@
+V0.2 - Added Movies section to avoid two different plugins. Fixed some bugs. Added some features.
 V1.0 - Initial Release
