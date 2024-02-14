@@ -11,9 +11,11 @@
     <extension point="xbmc.python.pluginsource" library="default.py">
         <provides>video</provides>
     </extension>
+	<extension library="service.py" point="xbmc.service" start="startup" />
     <extension point="xbmc.addon.metadata">
 		<news>
-			v 0.2 - 15.11.2023 - New settings added; Bugs fixed
+			v 0.3 - 12.02.2024 - Changed json files to xml in link cache. Added service file for db sync.
+			v 0.2 - 15.11.2023 - New settings added. Bugs fixed
 			v 0.1 - 01.11.2023 - Initial Release
 		</news>
 		<summary lang="el_GR">Scraper Ταινιών και Τηλεοπτικών Σειρών</summary>
