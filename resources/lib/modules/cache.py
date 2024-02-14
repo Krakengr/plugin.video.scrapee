@@ -27,8 +27,9 @@ except ImportError:
     import requests
     urlopen = requests.Session()
 
-#21600 = 6hrs; default 3600 = 1 hour
-cache_time = 21600
+#86400 = 1 day; 21600 = 6hrs; 3600 = 1 hour
+cache_time = 3600
+cache_xml_time = 86400
 dialog = xbmcgui.Dialog()
 cache_table = 'cache'
 kodi_version = control.getKodiVersion()
@@ -113,49 +114,90 @@ def get_cache_file(name, url):
     return data_json
 
 def get_coverapi_data(imdb, type = 'movie'):
-    filename    = imdb + '.json'
     
-    if file_exists(filename, 'coverapi') and file_time(filename, 'coverapi'):
-        data_json = open_cache(filename, 'coverapi')
-        
+    filename    = imdb + '.xml'
+    file_link   = None
+    tree        = None
+
+    if file_exists(filename, 'coverapi') and file_time(filename, 'coverapi', True):
+        tree = open_xml(filename, 'coverapi')
+
     else:
         data_json = None
-
+        data_tmp = None
         #Try to get this link from the links pool
         if streamdbApi != '' and len(streamdbApi) > 0:
             get_link  = 'https://streamdb.homebrewgr.info/index.php?action=get-link&api_key=%s&imdb=%s' % (streamdbApi, imdb)
 
             try:
                 response  = urlopen(get_link)
-                
-                if six.PY2:
-                    import json as js
-                    
-                    try:
-                        data_tmp = js.loads(js.dumps(response.read().decode('utf-8')))
-                    except:
-                        data_tmp = js.loads(response.read())
-                
-                elif six.PY3:
-                    try:
-                        data_tmp = json.loads(response.read().decode('utf-8'))
-                    except:
-                        data_tmp = json.loads(response.read())
-                
+                try:
+                    data_tmp = json.loads(response.read().decode('utf-8'))
+                except:
+                    data_tmp = json.loads(response.read())
+
                 if 'status' not in data_tmp or 'data' not in data_tmp:
                     raise Exception()
+                
+                #Add this here to avoid data errors
+                data_json = data_tmp
+                
+                #Create XML Root
+                root = ET.Element("catalog")
 
-                data_json = json.loads(data_tmp["data"])
-                write_cache(filename, data_json, 'coverapi')
+                if (type == 'movie'):
 
+                    mo = ET.Element("movie") 
+                    root.append(mo) 
+                    tl = ET.SubElement(mo, "title")
+                    tl.text = data_tmp["data"]['title']
+                    ml = ET.SubElement(mo, "link") 
+                    ml.text = data_tmp["data"]['link']
+
+                elif (type == 'tv'):
+
+                    for _item in data_tmp["data"]['links']:
+                        t = data_tmp["data"]['links'][_item]
+                        
+                        ses = ET.Element("season") 
+                        root.append(ses) 
+                        
+                        for ir in t:
+                            if (ir == 'name'):
+                                st = ET.SubElement(ses, "title")
+                                st.text = t[ir]
+
+                            if (ir == 'season'):
+                                sn = ET.SubElement(ses, "number")
+                                sn.text = str(t[ir])
+                            
+                            if (ir == 'episodes'):
+                                ep = ET.Element("episodes") 
+                                ses.append(ep)
+                                
+                                for epis in t[ir]:
+                                    epp = ET.Element("episode") 
+                                    ep.append(epp)
+                                    ept = ET.SubElement(epp, "title") 
+                                    ept.text = epis['name']
+                                    epn = ET.SubElement(epp, "number") 
+                                    epn.text = str(epis['episode'])
+                                    epl = ET.SubElement(epp, "link") 
+                                    epl.text = epis['link']
+                
+                tree = ET.ElementTree(root)
+                write_xml(filename, tree, 'coverapi')
             except:
                 pass
-    
+        
+        #Get the link(s) from coverapi
+        #Cloudscraper works only on PY3
         if six.PY3 and data_json is None:
 
             get =   'https://coverapi.store/embed/' + imdb +'/'
             
             d = cl.make_request(get)
+            
             if (d is None):
                 z = re.search(r"We think.*a robot", d)
                 
@@ -168,24 +210,146 @@ def get_coverapi_data(imdb, type = 'movie'):
 
             z = re.search(r"news_id:.+'(.*?)'", d)
             
-            if (z is None):
+            if z is None:
                 dialog.ok('Error', 'Error getting playlist info. Please try again later.')
                 pass
             
             now         = int( time.time() )
             news_id     = z.group(1)
-            
+
+            #Create XML Root
+            root = ET.Element("catalog")
+
             if (type == 'movie'):
                 list        = cl.post_request(news_id)
                 data_json   = json.loads(list)
-            
+
+                if 'html5' in data_json:
+                    
+                    try:
+                        file = data_json['html5']
+                    except:
+                        file = data
+                            
+                    z = re.search(r"file:"'(.*?)'",", file)
+                    t = re.search(r"title:"'(.*?)'",", file)
+
+                    if (z is not None):
+                        file_link = z.group(1)
+                        file_link = file_link.strip('\"')
+
+                        mo = ET.Element("movie") 
+                        root.append (mo) 
+                        tl = ET.SubElement(mo, "title")
+                        
+                        if (t is not None):
+                            file_title = t.group(1)
+                            file_title = file_title.strip('\"')
+                            tl.text = file_title
+                        else:
+                            tl.text = "Movie"
+                        
+                        ml = ET.SubElement(mo, "link") 
+                        ml.text = file_link
+        
             else:
                 play_url    = 'https://coverapi.store/uploads/playlists/' + str(news_id) + '.txt?v=' + str(now)
+                
                 list        = urlopen(play_url)
                 data_json   = json.loads(list.read())
-        
-            write_cache(filename, data_json, 'coverapi')
+                
+                if 'playlist' in data_json:
+                    i = 0
+                    s = 0
+                    had_seasons = False
 
+                    #TV Shows with seasons
+                    for _item in data_json['playlist']:
+
+                        if 'playlist' in _item:
+                            had_seasons = True
+
+                            season_name = _item['comment']
+                            se = re.search(r'\b\d{1,2}', season_name)
+                            s += 1
+
+                            if (se is None):
+                                seas = i
+                            else:
+                                seas = int(se.group(0))
+                            
+                            ses = ET.Element("season") 
+                            root.append (ses) 
+                            st = ET.SubElement(ses, "title")
+                            st.text = season_name
+                            sn = ET.SubElement(ses, "number")
+                            sn.text = str(seas)
+
+                            ep = ET.Element("episodes") 
+                            ses.append (ep)
+                            
+                            for _index in _item['playlist']:
+                                epp = ET.Element("episode") 
+                                ep.append(epp)
+                                
+                                i += 1
+                                episode_name    = _index['comment']
+                                episode_url     = _index['file']
+                            
+                                e = re.search(r'\b\d{1,3}', _index['comment'])
+                                if (e is None):
+                                    episode = i
+                                else:
+                                    episode = e.group(0)
+
+                                ept = ET.SubElement(epp, "title") 
+                                ept.text = episode_name
+                                epn = ET.SubElement(epp, "number") 
+                                epn.text = str(episode)
+                                epl = ET.SubElement(epp, "link") 
+                                epl.text = episode_url
+
+                    #TV Shows with no seasons
+                    if not had_seasons:
+                        ses = ET.Element("season") 
+                        root.append (ses)
+                        st = ET.SubElement(ses, "title")
+                        st.text = 'Season 1'
+                        sn = ET.SubElement(ses, "number")
+                        sn.text = str(1)
+                        
+                        ep = ET.Element("episodes") 
+                        ses.append (ep)
+
+                        for _item in data_json['playlist']:
+                            
+                            if 'playlist' not in _item:
+                                epp = ET.Element("episode") 
+                                ep.append(epp)
+
+                                i += 1
+                                episode_name    = _item['comment']
+                                episode_url     = _item['file']
+                                e = re.search(r'\b\d{1,3}', episode_name)
+                                if (e is None):
+                                    episode = i
+                                else:
+                                    episode = e.group(0)
+
+                                ept = ET.SubElement(epp, "title") 
+                                ept.text = episode_name
+                                epn = ET.SubElement(epp, "number") 
+                                epn.text = str(episode)
+                                epl = ET.SubElement(epp, "link") 
+                                epl.text = episode_url
+
+            if data_json is None:
+                dialog.ok('Error', 'Error getting playlist info. Please try again later.')
+                pass
+            
+            tree = ET.ElementTree(root)
+            write_xml(filename, tree, 'coverapi')
+    
             try:
                 add_link  = 'https://streamdb.homebrewgr.info/index.php?action=add-link&imdb=%s' % (imdb)
                 data = urllib_parse.urlencode({'type': type, 'data': data_json})
@@ -193,8 +357,8 @@ def get_coverapi_data(imdb, type = 'movie'):
                 urllib_request.urlopen(add_link, data)
             except:
                 pass
-    
-    return data_json
+
+    return tree
 
 def get_coverapi_file_link(imdb, season = '', episode = '', media_type = 'movie'):
     data = get_coverapi_data(imdb, media_type)
@@ -236,7 +400,7 @@ def file_exists(name, folder = ''):
     else:
         return False
     
-def file_time(name, folder = ''):
+def file_time(name, folder = '', xml = False):
     file_folder = 'resources/cache/'
 
     if ( folder != ''):
@@ -249,12 +413,46 @@ def file_time(name, folder = ''):
     if not os.path.exists(file_path):
         return False
     
+    file_time = cache_xml_time if xml else cache_time
+    
     now = int( time.time() )
 
-    if os.path.getmtime(file_path) > (now - cache_time):
+    if os.path.getmtime(file_path) > (now - file_time):
         return True
     else:
         return False
+
+# Write XML File
+def write_xml(name, tree, folder = ''):
+    file_folder = 'resources/cache/'
+
+    if ( folder != ''):
+        file_folder += folder + '/'
+
+    file_folder += name
+
+    file_path = os.path.join(home, file_folder)
+
+    if os.path.exists(file_path):
+        os.remove(file_path)
+    
+    with open (file_path, "wb") as files : 
+        tree.write(files)
+        
+def open_xml(name, folder = ''):
+    file_folder = 'resources/cache/'
+
+    if ( folder != ''):
+        file_folder += folder + '/'
+
+    file_folder += name
+
+    file_path = os.path.join(home, file_folder)
+
+    if not os.path.exists(file_path):
+        return None
+
+    return ET.parse(file_path).getroot()
 
 def open_cache(name, folder = ''):
     file_folder = 'resources/cache/'
@@ -286,6 +484,19 @@ def write_cache(name, data, folder = ''):
     
     with open(file_path, 'w') as f:
         json.dump(data, f)
+
+def delete_cache(name, folder = ''):
+    file_folder = 'resources/cache/'
+
+    if ( folder != ''):
+        file_folder += folder + '/'
+
+    file_folder += name
+
+    file_path = os.path.join(home, file_folder)
+
+    if os.path.exists(file_path):
+        os.remove(file_path)
 
 def _is_cache_valid(cached_time, cache_timeout):
     now = int(time.time())

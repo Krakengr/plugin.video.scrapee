@@ -45,48 +45,38 @@ class sources:
         control.infoDialog('Error : No Stream Available.', sound=False, icon='INFO')
 
     def play(self, title, year, media_type, imdb, tmdb, tvdb, season, episode, tvshowtitle, premiered, meta, select, fileurl):
+        
         if media_type == 'yt':
             from resources.lib.modules import trailer
             trailer.source().get(title, fileurl, 0, 0, 0, 0, 0)
             return
         else:
             try:
-                data = None
-
-                #Check if the link is in the DB
-                file_link = cache.get_link(media_type, imdb, season, episode)
+                root = None
+                filename    = imdb + '.xml'
                 
-                #Try to get this link from the links pool
-                if file_link is None:
-                    data = cache.get_coverapi_data(imdb, media_type)
+                if not cache.file_exists(filename, 'coverapi') and not cache.file_time(filename, 'coverapi'):
+                    cache.get_coverapi_data(imdb, 'movie')
 
-                #Got the data. Try to find the link(s).
-                if file_link is None and data is not None:
-                    if media_type == 'movie':
-                        
-                        if not 'html5' in data:
-                            raise Exception()
-                        
-                        try:
-                            file = data['html5']
-                        except:
-                            file = data
-                            
-                        z = re.search(r"file:"'(.*?)'",", file)
+                if cache.file_exists(filename, 'coverapi') and cache.file_time(filename, 'coverapi'):
+                    root = cache.open_xml(filename, 'coverapi')
 
-                        if (z is None):
-                            raise Exception()
-                            
-                        file_link = z.group(1)
-                        file_link = file_link.strip('\"')
-                        cache.add_link(file_link, media_type, imdb, season, episode)
+                if (root is None):
+                    raise Exception()
+                                    
+                if (media_type == 'movie'):
+                    try:
+                        file_link = root.find('movie').findtext('link')
+                    except:
+                        pass
+                
+                elif (media_type == 'tv'):
+                    
+                    if fileurl == None:
+                        raise Exception()
+                    
+                    file_link = fileurl
 
-                    elif media_type == 'tv':
-                        
-                        if fileurl == None:
-                            raise Exception()
-                        
-                        file_link = fileurl
                 try:
                     upd_url = self.upd_link % (imdb)
                     

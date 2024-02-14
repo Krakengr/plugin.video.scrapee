@@ -38,28 +38,24 @@ class seasons:
 
     def get(self, tvshowtitle, year, imdb, tmdb, meta, idx=True, create_directory=True):
         try:
-            data = cache.get_coverapi_data(imdb, 'tv')
-            xbmc.log('data:' + str(data), xbmc.LOGINFO)
-            if not 'playlist' in data:
+            root = None
+            filename    = imdb + '.xml'
+            
+            #Try to refresh the cachefile
+            if not cache.file_exists(filename, 'coverapi') and not cache.file_time(filename, 'coverapi'):
+                cache.get_coverapi_data(imdb, 'tv')
+                
+            if cache.file_exists(filename, 'coverapi') and cache.file_time(filename, 'coverapi'):
+                root = cache.open_xml(filename, 'coverapi')
+            
+            if (root is None):
                 raise Exception()
-            i = 0
             
-            for _item in data['playlist']:
-                i += 1
-                
-                #No seasons?
-                if 'playlist' not in _item.keys():
-                    title = 'Season %s' % (i)
-                    season = str(i)
-                    
-                    self.list.append({'title': title, 'season': season, 'year': year, 'imdb': imdb, 'tmdb': tmdb, 'tvdb': '0', 'meta': meta})
-                    break
-                
-                else:
-                    title = _item['comment']
-                    season = str(i)
-                    self.list.append({'title': title, 'season': season, 'year': year, 'imdb': imdb, 'tmdb': tmdb, 'tvdb': '0', 'meta': meta})
-            
+            for value in root.findall('season'):
+                title = value.findtext('title')
+                season = value.findtext('number')
+                self.list.append({'title': title, 'season': season, 'year': year, 'imdb': imdb, 'tmdb': tmdb, 'tvdb': '0', 'meta': meta})
+
             if create_directory == True:
                 self.seasonDirectory(self.list)
             
@@ -209,55 +205,34 @@ class episodes:
     def get(self, imdb, tmdb, season, year, meta):
         
         try:
-            data = cache.get_coverapi_data(imdb, 'tv')
-            
-            if not 'playlist' in data:
-                raise Exception()
-            i = 0
-            s = 0
+            root = None
+            filename    = imdb + '.xml'
             season = int(season)
+
+             #Try to refresh the cachefile
+            if not cache.file_exists(filename, 'coverapi') and not cache.file_time(filename, 'coverapi'):
+                cache.get_coverapi_data(imdb, 'tv')
+
+            if cache.file_exists(filename, 'coverapi') and cache.file_time(filename, 'coverapi'):
+                root = cache.open_xml(filename, 'coverapi')
             
-            for _item in data['playlist']:
+            if (root is None):
+                raise Exception()
+            
+            for value in root.findall('season'):
+                season_ = int(value.findtext('number'))
                 
-                #No seasons?
-                if 'playlist' not in _item.keys():
-                    i += 1
-                    episode_name    = _item['comment']
-                    episode_url     = _item['file']
-                    e = re.search(r'\b\d{1,3}', episode_name)
-                    if (e is None):
-                        episode = i
-                    else:
-                        episode = e.group(0)
+                if ( season_ != season):
+                    continue
 
-                    self.list.append({'title': episode_name, 'episode': episode, 'season': season, 'year': year, 'link': episode_url, 'imdb': imdb, 'tmdb': tmdb, 'tvdb': '0', 'meta': meta})
-                
-                else:
-                    season_name = _item['comment']
-                    se = re.search(r'\b\d{1,2}', season_name)
-                    s += 1
+                epiz = value.find('episodes')
 
-                    if (se is None):
-                        seas = i
-                    else:
-                        seas = int(se.group(0))
-
-                    if ( seas != season):
-                        xbmc.log('season skipped: ' + str(seas) + ' - ' + str(season), xbmc.LOGINFO)
-                        continue
+                for epis in epiz.findall('episode'):
+                    e_title = epis.findtext('title')
                     
-                    for _index in _item['playlist']:
-                        i += 1
-                        episode_name    = _index['comment']
-                        episode_url     = _index['file']
-                        
-                        e = re.search(r'\b\d{1,3}', _index['comment'])
-                        if (e is None):
-                            episode = i
-                        else:
-                            episode = e.group(0)
-                        
-                        self.list.append({'title': episode_name, 'episode': episode, 'season': season, 'year': year, 'link': episode_url, 'imdb': imdb, 'tmdb': tmdb, 'tvdb': '0', 'meta': meta})
+                    epi_ = epis.findtext('number')
+                    episode_url = epis.findtext('link')
+                    self.list.append({'title': e_title, 'episode': epi_, 'season': season_, 'year': year, 'link': episode_url, 'imdb': imdb, 'tmdb': tmdb, 'tvdb': '0', 'meta': meta})
             
             self.episodeDirectory(self.list)
             
