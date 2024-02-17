@@ -86,6 +86,7 @@ class movies:
         
         self.popular_link = self.main_link + '&action=popular-movies&page=' + str(self.curr_page)
         self.most_voted_link = self.main_link + '&action=most-voted-movies&page=' + str(self.curr_page)
+        self.most_liked_link = self.main_link + '&action=most-liked-movies&page=' + str(self.curr_page)
         self.highly_rating_link = self.main_link + '&action=highly-rating-movies&page=' + str(self.curr_page)
         self.latest_link = self.main_link + '&action=latest-movies&page=' + str(self.curr_page)
         self.years_link = self.main_link + '&action=movie-years'
@@ -114,6 +115,10 @@ class movies:
             return self.list
         elif url == 'most_voted':
             self.getByVotes()
+            self.movieDirectory(self.list)
+            return self.list
+        elif url == 'most_liked':
+            self.getByLikes()
             self.movieDirectory(self.list)
             return self.list
         elif url == 'movies_years':
@@ -343,7 +348,7 @@ class movies:
             url         = self.by_year_link % (year)
             name        = 'movies_by_year-' + str(year) + '_page-' + str(self.curr_page)
             data_json   = cache.get_cache_file(str(name), url)
-                
+            
             if data_json["status"] != "OK":
                 raise Exception()
                 
@@ -388,6 +393,9 @@ class movies:
                 #num = item['items']
                 id = str(item['id'])
                 name  = str(item['name'])
+
+                if 'items' in item:
+                    name  += ' [COLOR red][' + str(item['items']) + ' items][/COLOR]'
                
                 self.list.append({'name': name, 'url': 'movies_by_genre', 'genre': id, 'image': 'genres.png', 'action': 'movies'})
 
@@ -414,6 +422,9 @@ class movies:
                 #label = '%s (%s)' % (item['name'], item['items'])
                 #num = item['items']
                 year = str(item['name'])
+
+                #if 'items' in item:
+                    #year  += ' [COLOR red][' + str(item['items']) + ' items][/COLOR]'
                
                 self.list.append({'name': year, 'url': 'movies_by_year', 'year': year, 'image': 'years.png', 'action': 'movies'})
 
@@ -423,6 +434,21 @@ class movies:
             control.dialog.ok('Error', 'Error getting data. Please try again later.')
             pass
 
+        return self.list
+    
+    def getByLikes(self):
+        try:
+            url         = self.most_liked_link
+            name        = 'movies_by_likes_page-' + str(self.curr_page)
+            data_json   = cache.get_cache_file(str(name), url)
+                
+            if data_json["status"] != "OK":
+                raise Exception()
+                
+            self.buildMovieArr(data_json)
+        except:
+            control.dialog.ok('Error', 'Error getting data. Please try again later.')
+            pass
         return self.list
     
     def getByVotes(self):

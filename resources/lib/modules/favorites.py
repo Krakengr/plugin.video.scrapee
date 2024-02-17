@@ -38,14 +38,17 @@ def syncfdb(type = 'movie'):
 
     data = data_json['data']
 
+    if type == 'tv':
+        type = 'tvshow'
+
     if 'favorites' in data:
         items = data['favorites']
-
+        
         for item in items:
             addFavorite(json.dumps(item), type, True)
 
 def addFavorite(meta, content, upd = False):
-    
+
     try:
         item = dict()
         meta = json.loads(meta)
@@ -53,8 +56,8 @@ def addFavorite(meta, content, upd = False):
         try:
             id = meta['imdb_id'] if 'imdb_id' in meta else meta['imdb']
         except:
-            id = meta['tmdb']
-        
+            return
+
         if 'title' in meta:
             title = item['title'] = meta['title']
         if 'tvshowtitle' in meta:
@@ -98,6 +101,8 @@ def addFavorite(meta, content, upd = False):
             item['tmdb'] = meta['tmdb']
         if 'tvdb' in meta:
             item['tvdb'] = meta['tvdb']
+
+        
         control.makeFile(control.dataPath)
         dbcon = database.connect(control.favoritesFile)
         dbcur = dbcon.cursor()
@@ -111,7 +116,6 @@ def addFavorite(meta, content, upd = False):
             control.infoDialog('Added to MyFavorites', heading=title, icon=item['poster'])
     except:
         return
-
 
 def deleteFavorite(meta, content):
     try:

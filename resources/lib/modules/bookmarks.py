@@ -57,7 +57,7 @@ def updt(current_time, media_type, imdb, season='', episode=''):
         if media_type == 'movie':
             sql_insert = "INSERT INTO bookmarks Values ('%s', '%s', '%s', '', '', '%s', '%s')" % (timeInSeconds, media_type, imdb, _playcount, overlay)
         elif media_type == 'tv':
-            sql_insert = "INSERT INTO bookmarks Values ('%s', '%s', '%s', '%s', '%s', '%s', '%s')" % (timeInSeconds, media_type, imdb, season, episode, _playcount, overlay)
+            sql_insert = "INSERT INTO bookmarks Values ('%s', '%s', '%s', '%s', '%s', '%s', '%s')" % (timeInSeconds, 'episode', imdb, season, episode, _playcount, overlay)
                   
         control.makeFile(control.dataPath)
         dbcon = database.connect(control.bookmarksFile)

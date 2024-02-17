@@ -38,16 +38,16 @@ class seasons:
 
     def get(self, tvshowtitle, year, imdb, tmdb, meta, idx=True, create_directory=True):
         try:
-            root = None
+            root        = None
             filename    = imdb + '.xml'
             
             #Try to refresh the cachefile
-            if not cache.file_exists(filename, 'coverapi') and not cache.file_time(filename, 'coverapi'):
+            if not cache.file_exists(filename, 'coverapi') and not cache.file_time(filename, 'coverapi', True):
                 cache.get_coverapi_data(imdb, 'tv')
-                
-            if cache.file_exists(filename, 'coverapi') and cache.file_time(filename, 'coverapi'):
+
+            if cache.file_exists(filename, 'coverapi') and cache.file_time(filename, 'coverapi', True):
                 root = cache.open_xml(filename, 'coverapi')
-            
+
             if (root is None):
                 raise Exception()
             
@@ -205,15 +205,15 @@ class episodes:
     def get(self, imdb, tmdb, season, year, meta):
         
         try:
-            root = None
+            root        = None
             filename    = imdb + '.xml'
-            season = int(season)
+            season      = int(season)
 
              #Try to refresh the cachefile
-            if not cache.file_exists(filename, 'coverapi') and not cache.file_time(filename, 'coverapi'):
+            if not cache.file_exists(filename, 'coverapi') and not cache.file_time(filename, 'coverapi', True):
                 cache.get_coverapi_data(imdb, 'tv')
 
-            if cache.file_exists(filename, 'coverapi') and cache.file_time(filename, 'coverapi'):
+            if cache.file_exists(filename, 'coverapi') and cache.file_time(filename, 'coverapi', True):
                 root = cache.open_xml(filename, 'coverapi')
             
             if (root is None):

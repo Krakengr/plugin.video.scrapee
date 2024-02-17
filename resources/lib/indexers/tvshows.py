@@ -211,7 +211,7 @@ class tvshows:
         
     def favorites(self):
         try:
-            items = favorites.getFavorites('tv')
+            items = favorites.getFavorites('tvshow')
             
             items = [(i[0].encode('utf-8'), eval(i[1].encode('utf-8'))) for i in items]
             self.list = [i[1] for i in items]
@@ -395,7 +395,10 @@ class tvshows:
             for item in items:
                 id = str(item['id'])
                 name  = str(item['name'])
-               
+
+                if 'items' in item:
+                    name  += ' [COLOR red][' + str(item['items']) + ' items][/COLOR]'
+                
                 self.list.append({'name': name, 'url': 'tv_shows_by_network', 'netw': id, 'image': 'genres.png', 'action': action})
 
             self.addDirectory(self.list)
@@ -422,6 +425,9 @@ class tvshows:
                 #num = item['items']
                 id = str(item['id'])
                 name  = str(item['name'])
+
+                if 'items' in item:
+                    name  += ' [COLOR red][' + str(item['items']) + ' items][/COLOR]'
                
                 self.list.append({'name': name, 'url': 'tv_shows_by_genre', 'genre': id, 'image': 'genres.png', 'action': action})
 
@@ -445,9 +451,11 @@ class tvshows:
             items = data_json['data']
 
             for item in items:
-                #label = '%s (%s)' % (item['name'], item['items'])
-                #num = item['items']
+
                 year = str(item['name'])
+
+                #if 'items' in item:
+                    #year  += ' [COLOR red][' + str(item['items']) + ' items][/COLOR]'
                
                 self.list.append({'name': year, 'url': 'tv_shows_by_year', 'year': year, 'image': 'years.png', 'action': action})
 
@@ -541,7 +549,7 @@ class tvshows:
         
         try:
             url         = self.search_person_link % (pid)
-            xbmc.log('Action: ' + str(url), xbmc.LOGINFO)
+
             response    = urlopen(url) 
             data_json   = json.loads(response.read())
             if data_json["status"] != "OK":

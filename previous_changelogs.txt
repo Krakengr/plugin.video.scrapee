@@ -1,2 +1,3 @@
+V0.3 - Changed json files to xml in link cache. Added service.py file for db sync. Fixed some bugs.
 V0.2 - Added Movies section to avoid two different plugins. Fixed some bugs. Added some features.
-V1.0 - Initial Release
+V0.1 - Initial Release

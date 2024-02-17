@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
-
+import six
 from six.moves.urllib_parse import parse_qsl
-from kodi_six import xbmc
+from kodi_six import xbmc, xbmcgui
+dialog = xbmcgui.Dialog()
 
 def router(_argv):
     params = dict(parse_qsl(_argv.replace('?', '')))
@@ -40,30 +41,12 @@ def router(_argv):
 
     elif action == 'movies_menu':
         from resources.lib.indexers import navigator
-        from resources.lib.modules import control
-       
-        #bookmarks.syncdb()
-        #favorites.syncfdb()
-        #history.synchdb()
-        #likes.syncldb()
 
-        if not control.condVisibility('System.HasAddon(script.module.cloudscraper)'):
-            control.installAddon('script.module.cloudscraper')
-            
         navigator.navigator().moviesMenu()
     
     elif action == 'tvshows_menu':
         from resources.lib.indexers import navigator
-        from resources.lib.modules import control
         
-        #bookmarks.syncdb('tv')
-        #favorites.syncfdb('tv')
-        #history.synchdb('tv')
-        #likes.syncldb('tv')
-
-        if not control.condVisibility('System.HasAddon(script.module.cloudscraper)'):
-            control.installAddon('script.module.cloudscraper')
-
         navigator.navigator().tvshows()
     
     elif action == 'tv_search':

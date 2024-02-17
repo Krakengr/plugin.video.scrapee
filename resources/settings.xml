@@ -12,6 +12,7 @@
         <setting id="show.noyear" type="bool" label="Show Items Without/Future Year/AirDate" default="false" />
         <setting id="indicators.alt" type="enum" label="Indicators" values="Local|StreamDB" default="1" visible="!eq(-4,)" />
         <setting id="items.per.page" type="slider" label="Items Per Page" default="20" range="10,40" option="int" />
+		<setting id="cache.duration" type="slider" label="Caching Duration (In minutes)" default="86400" range="1800,120000" option="int" />
         <setting id="trailers.youtube" type="bool" label="Use YouTube" default="false" enable="!eq(-2,false)" subsetting="true" visible="eq(-2,4)" />
     </category>
 

@@ -55,10 +55,10 @@ class sources:
                 root = None
                 filename    = imdb + '.xml'
                 
-                if not cache.file_exists(filename, 'coverapi') and not cache.file_time(filename, 'coverapi'):
+                if not cache.file_exists(filename, 'coverapi') and not cache.file_time(filename, 'coverapi', True):
                     cache.get_coverapi_data(imdb, 'movie')
 
-                if cache.file_exists(filename, 'coverapi') and cache.file_time(filename, 'coverapi'):
+                if cache.file_exists(filename, 'coverapi') and cache.file_time(filename, 'coverapi', True):
                     root = cache.open_xml(filename, 'coverapi')
 
                 if (root is None):

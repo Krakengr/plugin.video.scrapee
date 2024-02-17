@@ -38,6 +38,9 @@ def syncldb(type = 'movie'):
 
     data = data_json['data']
 
+    if type == 'tv':
+        type = 'tvshow'
+
     if 'likes' in data:
         items = data['likes']
 
@@ -45,6 +48,8 @@ def syncldb(type = 'movie'):
             addLike(json.dumps(item), type, True)
 
 def addLike(meta, content, upd = False):
+    xbmc.log('meta: ' + str(meta), xbmc.LOGINFO)
+    xbmc.log('content: ' + str(content), xbmc.LOGINFO)
     try:
         item = dict()
         meta = json.loads(meta)

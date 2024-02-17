@@ -36,6 +36,7 @@ class navigator:
         self.addDirectoryItem('Latest Movies', 'movies&url=latest_movies', 'latest-movies.png', 'DefaultMovies.png')
         self.addDirectoryItem('Highly Rated', 'movies&url=highly_rating', 'highly-rated.png', 'DefaultMovies.png')
         self.addDirectoryItem('Most Voted', 'movies&url=most_voted', 'most-voted.png', 'DefaultMovies.png')
+        self.addDirectoryItem('Most-Liked', 'movies&url=most_liked', 'most-voted.png', 'DefaultMovies.png')
         self.addDirectoryItem('Years', 'movies&url=movies_years', 'years.png', 'DefaultMovies.png')
         self.addDirectoryItem('Genres', 'movies&url=movies_genres', 'genres.png', 'DefaultMovies.png')
         self.addDirectoryItem('My Favorite Movies', 'movies&url=favorites', 'userlists.png', 'DefaultTVShows.png')
