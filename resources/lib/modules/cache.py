@@ -151,7 +151,7 @@ def get_coverapi_data(imdb, type = 'movie'):
             else:
                 from resources.lib.modules import scraper as cl
                 scraper = cl.create_scraper()
-                d = scraper.get(get).content
+                d = scraper.get(get).text
 
         if (d is None):
             z = re.search(r"We think.*a robot", d)
