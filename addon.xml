@@ -4,9 +4,10 @@
         <import addon="script.module.six" />
         <import addon="script.module.kodi-six" />
         <import addon="script.module.simplejson" />
-		<import addon="script.module.cloudscraper" optional="true" />
-		<import addon="plugin.video.youtube" optional="true" />
-		<import addon="script.scrubsv2.artwork" optional="true" />
+	<import addon="script.module.requests" version="2.22.0+matrix.1" />
+	<import addon="script.module.cloudscraper" optional="true" />
+	<import addon="plugin.video.youtube" optional="true" />
+	<import addon="script.scrubsv2.artwork" optional="true" />
     </requires>
     <extension point="xbmc.python.pluginsource" library="default.py">
         <provides>video</provides>
