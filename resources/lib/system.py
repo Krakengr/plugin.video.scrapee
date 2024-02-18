@@ -37,6 +37,8 @@ def router(_argv):
 
     if action == None:
         from resources.lib.indexers import navigator
+        from resources.lib.modules import sync
+        sync.firstSync()
         navigator.navigator().root()
 
     elif action == 'movies_menu':

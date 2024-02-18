@@ -90,6 +90,7 @@ dataPath = transPath(addonInfo('profile'))
 skinPath = transPath('special://skin/')
 homePath = xbmcaddon.Addon().getAddonInfo('path')
 
+syncFile = os.path.join(dataPath, 'sync.txt')
 cacheFile = os.path.join(dataPath, 'cache.db')
 viewsFile = os.path.join(dataPath, 'views.db')
 likesFile = os.path.join(dataPath, 'likes.db')
