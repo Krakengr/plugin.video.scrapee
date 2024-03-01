@@ -54,11 +54,12 @@ class sources:
             try:
                 root = None
                 filename    = imdb + '.xml'
-                
-                if not cache.file_exists(filename, 'coverapi') and not cache.file_time(filename, 'coverapi', True):
-                    cache.get_coverapi_data(imdb, 'movie')
 
                 if cache.file_exists(filename, 'coverapi') and cache.file_time(filename, 'coverapi', True):
+                    root = cache.open_xml(filename, 'coverapi')
+                
+                else:
+                    cache.get_coverapi_data(imdb, 'movie')
                     root = cache.open_xml(filename, 'coverapi')
 
                 if (root is None):
@@ -68,7 +69,7 @@ class sources:
                     try:
                         file_link = root.find('movie').findtext('link')
                     except:
-                        pass
+                        raise Exception()
                 
                 elif (media_type == 'tv'):
                     

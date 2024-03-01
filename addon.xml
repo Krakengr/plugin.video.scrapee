@@ -1,13 +1,12 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<addon id="plugin.video.scrapee" version="0.4" name="[COLOR orange]Scrapee[/COLOR]" provider-name="AkisMpo">
+<addon id="plugin.video.scrapee" version="0.5" name="[COLOR orange]Scrapee[/COLOR]" provider-name="AkisMpo">
     <requires>
         <import addon="script.module.six" />
         <import addon="script.module.kodi-six" />
         <import addon="script.module.simplejson" />
-	<import addon="script.module.requests" version="2.27.1+matrix.1" />
-	<import addon="script.module.cloudscraper" optional="true" />
-	<import addon="plugin.video.youtube" optional="true" />
-	<import addon="script.scrubsv2.artwork" optional="true" />
+		<import addon="script.module.cloudscraper" optional="true" />
+		<import addon="plugin.video.youtube" optional="true" />
+		<import addon="script.scrubsv2.artwork" optional="true" />
     </requires>
     <extension point="xbmc.python.pluginsource" library="default.py">
         <provides>video</provides>
@@ -15,6 +14,7 @@
 	<extension library="service.py" point="xbmc.service" start="startup" />
     <extension point="xbmc.addon.metadata">
 		<news>
+			v 0.5 - 29.02.2024 - Fixed a cache link bug. Added version check.
 			v 0.4 - 16.02.2024 - Added cfscrape support for older versions of Kodi.
 			v 0.3 - 12.02.2024 - Changed json files to xml in link cache. Added service.py file for db sync.
 			v 0.2 - 15.11.2023 - New settings added. Bugs fixed

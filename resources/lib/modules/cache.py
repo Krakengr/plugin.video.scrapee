@@ -99,7 +99,7 @@ def get_link(media_type, imdb, season = 0, episode = 0):
 def get_cache_file(name, url):
     
     filename    = name + '.json'
-    xbmc.log('response: ' + str(filename), xbmc.LOGINFO)
+
     if file_exists(filename) and file_time(filename):
         data_json = open_cache(filename)
         
@@ -126,12 +126,12 @@ def get_coverapi_data(imdb, type = 'movie'):
 
     if file_exists(filename, 'coverapi') and file_time(filename, 'coverapi', True):
         tree = open_xml(filename, 'coverapi')
-        
+
     else:
         d = None
         list = None
         get =   'https://coverapi.store/embed/' + imdb +'/'
-
+        
         #Delete the cache file if exists
         delete_cache(filename, 'coverapi')
 
@@ -139,7 +139,8 @@ def get_coverapi_data(imdb, type = 'movie'):
         if six.PY2 and data_json is None:
             from resources.lib.modules import scraper as cl
             scraper = cl.create_scraper()
-            d = scraper.get(get).content
+            d = scraper.get(get).text
+            #d = scraper.get(get).content
 
         if six.PY3 and data_json is None:
             
@@ -742,6 +743,10 @@ def clean_settings():
         nfo_file = control.openFile(control.settingsFile, 'w')
         nfo_file.write(new_content)
         nfo_file.close()
+
+        if os.path.exists(control.syncFile):
+            os.remove(control.syncFile)
+            
         control.infoDialog('Clean Settings: %s Old Settings Removed' % (str(len(removed_settings))))
     except:
         log_utils.log('clean_settings', 1)
