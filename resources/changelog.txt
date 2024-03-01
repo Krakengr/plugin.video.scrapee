@@ -4,6 +4,7 @@
 (thunderlake@gmail.com OR https://github.com/Krakengr/plugin.video.scrapee-/issues)[/COLOR][/B]
 [Plugin is tested with: Kodi v20, older versions may not work as expected.]
 
+[B]- 0.5[/B] Fixed a cache link bug. Added version check.
 [B]- 0.4[/B] Added cfscrape support for older versions of Kodi. Fixed some bugs.
 [B]- 0.3[/B] Changed json files to xml in link cache. Added service.py file for db sync.
 [B]- 0.2[/B] Added Movies section to avoid two different plugins. Fixed some bugs. Added some features.
