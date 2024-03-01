@@ -14,7 +14,7 @@
 	<extension library="service.py" point="xbmc.service" start="startup" />
     <extension point="xbmc.addon.metadata">
 		<news>
-			v 0.5 - 29.02.2024 - Fixed a cache link bug. Added version check.
+			v 0.5 - 29.02.2024 - Fixed a bug in links cache system. Added version check.
 			v 0.4 - 16.02.2024 - Added cfscrape support for older versions of Kodi.
 			v 0.3 - 12.02.2024 - Changed json files to xml in link cache. Added service.py file for db sync.
 			v 0.2 - 15.11.2023 - New settings added. Bugs fixed
