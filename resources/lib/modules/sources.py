@@ -58,6 +58,7 @@ class sources:
                 if cache.file_exists(filename, 'coverapi') and cache.file_time(filename, 'coverapi', True):
                     root = cache.open_xml(filename, 'coverapi')
                 
+                #Try to refresh the cachefile
                 else:
                     cache.get_coverapi_data(imdb, 'movie')
                     root = cache.open_xml(filename, 'coverapi')

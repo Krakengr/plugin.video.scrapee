@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import six
+import xbmcaddon
 from six.moves.urllib_parse import parse_qsl
 from kodi_six import xbmc, xbmcgui
 dialog = xbmcgui.Dialog()
@@ -43,12 +44,10 @@ def router(_argv):
 
     elif action == 'movies_menu':
         from resources.lib.indexers import navigator
-
         navigator.navigator().moviesMenu()
     
     elif action == 'tvshows_menu':
         from resources.lib.indexers import navigator
-        
         navigator.navigator().tvshows()
     
     elif action == 'tv_search':
@@ -280,6 +279,17 @@ def router(_argv):
         from resources.lib.modules import libtools
         libtools.libepisodes().update(query)
 
+
+    elif action == 'sync_database':
+        from resources.lib.modules import sync
+        from resources.lib.modules import control
+        yes = control.yesnoDialog('Sync Database?')
+        
+        if not yes:
+            return
+        
+        sync.syncLibrary()
+        control.infoDialog('Database Synced.', sound=True, icon='INFO')
 
     elif action == 'view_changelog':
         from resources.lib.modules import log_utils

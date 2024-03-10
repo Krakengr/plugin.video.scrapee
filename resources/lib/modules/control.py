@@ -185,6 +185,20 @@ def moderator():
         xbmc.log('Scrapee Moderator Failure: %s' % error, xbmc.LOGDEBUG)
 
 
+def version_check():
+    try:
+        import requests
+        plugin_version          = addon('xbmc.addon').getAddonInfo('version')
+        current_version_link    = 'https://raw.githubusercontent.com/Krakengr/plugin.video.scrapee-/main/current_version.txt'
+        current_version         = requests.get(current_version_link).text
+
+        if (current_version > plugin_version ):
+            return True
+    except:
+        pass
+    
+    return False
+
 def version():
     num = ''
     try:

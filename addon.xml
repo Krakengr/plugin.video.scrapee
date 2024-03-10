@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<addon id="plugin.video.scrapee" version="0.5" name="[COLOR orange]Scrapee[/COLOR]" provider-name="AkisMpo">
+<addon id="plugin.video.scrapee" version="0.6" name="[COLOR orange]Scrapee[/COLOR]" provider-name="AkisMpo">
     <requires>
         <import addon="script.module.six" />
         <import addon="script.module.kodi-six" />
@@ -14,8 +14,9 @@
 	<extension library="service.py" point="xbmc.service" start="startup" />
     <extension point="xbmc.addon.metadata">
 		<news>
-			v 0.5 - 29.02.2024 - Fixed a bug in links cache system. Added version check.
-			v 0.4 - 16.02.2024 - Added cfscrape support for older versions of Kodi.
+			v 0.6 - 08.03.2024 - Fixed a bug in TV shows links. Added sync database in options menu.
+			v 0.5 - 29.02.2024 - Fixed a bug in the cache system. Added version check.
+			v 0.4 - 16.02.2024 - Added cfscrape for older versions of Kodi.
 			v 0.3 - 12.02.2024 - Changed json files to xml in link cache. Added service.py file for db sync.
 			v 0.2 - 15.11.2023 - New settings added. Bugs fixed
 			v 0.1 - 01.11.2023 - Initial Release

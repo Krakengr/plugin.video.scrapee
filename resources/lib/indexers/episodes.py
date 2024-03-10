@@ -40,12 +40,13 @@ class seasons:
         try:
             root        = None
             filename    = imdb + '.xml'
-            
-            #Try to refresh the cachefile
-            if not cache.file_exists(filename, 'coverapi') and not cache.file_time(filename, 'coverapi', True):
-                cache.get_coverapi_data(imdb, 'tv')
 
             if cache.file_exists(filename, 'coverapi') and cache.file_time(filename, 'coverapi', True):
+                root = cache.open_xml(filename, 'coverapi')
+            
+            #Try to refresh the cachefile
+            else:
+                cache.get_coverapi_data(imdb, 'tv')
                 root = cache.open_xml(filename, 'coverapi')
 
             if (root is None):
@@ -209,11 +210,12 @@ class episodes:
             filename    = imdb + '.xml'
             season      = int(season)
 
-             #Try to refresh the cachefile
-            if not cache.file_exists(filename, 'coverapi') and not cache.file_time(filename, 'coverapi', True):
-                cache.get_coverapi_data(imdb, 'tv')
-
             if cache.file_exists(filename, 'coverapi') and cache.file_time(filename, 'coverapi', True):
+                root = cache.open_xml(filename, 'coverapi')
+            
+            #Try to refresh the cachefile
+            else:
+                cache.get_coverapi_data(imdb, 'tv')
                 root = cache.open_xml(filename, 'coverapi')
             
             if (root is None):
@@ -251,6 +253,7 @@ class episodes:
         syshandle = int(sys.argv[1])
         isPlayable = True
         indicators = playcount.getTVShowIndicators(refresh=True)
+
         try:
             multi = [i['title'] for i in items]
         except:

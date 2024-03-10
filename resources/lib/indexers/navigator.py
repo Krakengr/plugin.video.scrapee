@@ -91,6 +91,10 @@ class navigator:
     def tools(self):
         self.addDirectoryItem('Cleaning Tools', 'cleantools_menu', 'tools.png', 'DefaultAddonProgram.png')
         self.addDirectoryItem('General Settings', 'open_settings&query=0.0', 'tools.png', 'DefaultAddonProgram.png', isFolder=False)
+        
+        if streamdbApi != '' and len(streamdbApi) > 0:
+            self.addDirectoryItem('Sync Database', 'sync_database', 'tools.png', 'DefaultAddonProgram.png', isFolder=False)
+            
         self.addDirectoryItem('View Change Log', 'view_changelog', 'tools.png', 'DefaultAddonProgram.png', isFolder=False)
         self.addDirectoryItem('View Previous Change Logs', 'view_previous_changelogs', 'tools.png', 'DefaultAddonProgram.png', isFolder=False)
         self.addDirectoryItem('Optional Installs', 'installs_menu', 'tools.png', 'DefaultAddonProgram.png')
