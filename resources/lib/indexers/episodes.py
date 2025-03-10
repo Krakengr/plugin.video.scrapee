@@ -1,464 +1,415 @@
 # -*- coding: utf-8 -*-
+from apis.trakt_api import trakt_watchlist, trakt_get_my_calendar
+from caches.favorites_cache import favorites
+from modules import kodi_utils, settings, watched_status as ws
+from modules.watched_status import get_hidden_progress_items
+from modules.metadata import tvshow_meta, episodes_meta, all_episodes_meta
+from modules.utils import jsondate_to_datetime, adjust_premiered_date, make_day, get_datetime, title_key, date_difference, make_thread_list_enumerate
+logger = kodi_utils.logger
 
-import re
-import os
-import sys
-import datetime
+remove_keys, set_view_mode, external, sys = kodi_utils.remove_keys, kodi_utils.set_view_mode, kodi_utils.external, kodi_utils.sys
+add_items, set_content, set_sort_method, end_directory = kodi_utils.add_items, kodi_utils.set_content, kodi_utils.set_sort_method, kodi_utils.end_directory
+ls, make_listitem, build_url, dict_removals, sys = kodi_utils.local_string, kodi_utils.make_listitem, kodi_utils.build_url, kodi_utils.episode_dict_removals, kodi_utils.sys
+xbmc_actor, set_category, get_property = kodi_utils.xbmc_actor, kodi_utils.set_category, kodi_utils.get_property
+get_art_provider, show_specials, calendar_sort_order, ignore_articles = settings.get_art_provider, settings.show_specials, settings.calendar_sort_order, settings.ignore_articles
+metadata_user_info, watched_indicators_info, show_unaired_info = settings.metadata_user_info, settings.watched_indicators, settings.show_unaired
+nextep_content_settings, nextep_display_settings = settings.nextep_content_settings, settings.nextep_display_settings
+date_offset_info, default_all_episodes = settings.date_offset, settings.default_all_episodes
+single_ep_display_title, single_ep_format = settings.single_ep_display_title, settings.single_ep_format
+tv_meta_function, episodes_meta_function, all_episodes_meta_function = tvshow_meta, episodes_meta, all_episodes_meta
+adjust_premiered_date_function, jsondate_to_datetime_function = adjust_premiered_date, jsondate_to_datetime
+date_difference_function, make_day_function, title_key_function, get_datetime_function = date_difference, make_day, title_key, get_datetime
+get_progress_percent, get_watched_status, get_watched_info, get_bookmarks = ws.get_progress_percent, ws.get_watched_status_episode, ws.get_watched_info_tv, ws.get_bookmarks
+get_in_progress_episodes, get_next_episodes, get_recently_watched = ws.get_in_progress_episodes, ws.get_next_episodes, ws.get_recently_watched
+string, fen_str, trakt_str, watched_str, unwatched_str, season_str, episodes_str =  str, ls(32036), ls(32037), ls(32642), ls(32643), ls(32537), ls(32506)
+extras_str, options_str, clearprog_str, refr_widg_str, play_options_str = ls(32645), ls(32646), ls(32651), '[B]%s[/B]' % ls(32611), '[B]%s...[/B]' % ls(32187)
+poster_empty, fanart_empty = kodi_utils.empty_poster, kodi_utils.addon_fanart
+run_plugin, unaired_label, tmdb_poster_prefix = 'RunPlugin(%s)', '[COLOR red][I]%s[/I][/COLOR]', 'https://image.tmdb.org/t/p/'
+upper = string.upper
+content_type = 'episodes'
+list_view, single_view = 'view.episodes', 'view.episodes_single'
+category_name_dict = {'episode.progress': ls(32482), 'episode.recently_watched': ls(32200), 'episode.next': ls(32483),
+					'episode.trakt': {'true': '%s %s' % (ls(32505), episodes_str), None: ls(32081)}}
 
-import simplejson as json
-import six
-from six.moves import range, urllib_parse
-from kodi_six import xbmc, xbmcaddon, xbmcgui, xbmcplugin, xbmcvfs
+def build_episode_list(params):
+	def _process():
+		for item in episodes_data:
+			try:
+				cm = []
+				listitem = make_listitem()
+				set_properties = listitem.setProperties
+				cm_append = cm.append
+				item_get = item.get
+				season, episode, ep_name = item_get('season'), item_get('episode'), item_get('title')
+				episode_date, premiered = adjust_premiered_date_function(item_get('premiered'), adjust_hours)
+				episode_type = item_get('episode_type') or ''
+				playcount, overlay = get_watched_status(watched_info, string(tmdb_id), season, episode)
+				progress = get_progress_percent(bookmarks, tmdb_id, season, episode)
+				tmdb_thumb = item_get('thumb', None)
+			
+				try: year = premiered.split('-')[0]
+				except: year = show_year or '2050'
+				if fanart_enabled:
+					if fanart_default: thumb = tmdb_thumb or season_art.get('seasonthumb_%s' % season, '') or show_fanart
+					else: thumb = tmdb_thumb or show_fanart or season_art.get('seasonthumb_%s' % season, '')
+				else: thumb = tmdb_thumb or show_fanart
+				if not item_get('duration'): item['duration'] = show_duration
+				options_params = build_url({'mode': 'options_menu_choice', 'content': 'episode', 'tmdb_id': tmdb_id, 'season': season, 'episode': episode,
+											'poster': show_poster, 'playcount': playcount, 'progress': progress, 'is_external': is_external})
+				extras_params = build_url({'mode': 'extras_menu_choice', 'tmdb_id': tmdb_id, 'media_type': 'episode', 'is_external': is_external})
+				play_options_params = build_url({'mode': 'playback_choice', 'media_type': 'episode', 'poster': show_poster, 'meta': tmdb_id, 'season': season, 'episode': episode})
+				url_params = build_url({'mode': 'playback.media', 'media_type': 'episode', 'tmdb_id': tmdb_id, 'season': season, 'episode': episode})
+				if not episode_date or current_date < episode_date:
+					if not show_unaired: continue
+					if season != 0:
+						display, unaired = unaired_label % ep_name, True
+						item['title'] = display
+					else: display, unaired = ep_name, False
+				else: display, unaired = ep_name, False
+				cm_append((extras_str, run_plugin % extras_params))
+				cm_append((options_str, run_plugin % options_params))
+				cm_append((play_options_str, run_plugin % play_options_params))
+				clearprog_params, unwatched_params, watched_params = '', '', ''
+				if not unaired:
+					if playcount:
+						if hide_watched: continue
+						unwatched_params = build_url({'mode': 'watched_status.mark_episode', 'action': 'mark_as_unwatched', 'tmdb_id': tmdb_id,
+													'tvdb_id': tvdb_id, 'season': season, 'episode': episode,  'title': title})
+						cm_append((unwatched_str % watched_title, run_plugin % unwatched_params))
+					else:
+						watched_params = build_url({'mode': 'watched_status.mark_episode', 'action': 'mark_as_watched', 'tmdb_id': tmdb_id,
+													'tvdb_id': tvdb_id, 'season': season, 'episode': episode,  'title': title})
+						cm_append((watched_str % watched_title, run_plugin % watched_params))
+					if progress:
+						clearprog_params = build_url({'mode': 'watched_status.erase_bookmark', 'media_type': 'episode', 'tmdb_id': tmdb_id,
+													'season': season, 'episode': episode, 'refresh': 'true'})
+						cm_append((clearprog_str, run_plugin % clearprog_params))
+				if is_external:
+					cm_append((refr_widg_str, run_plugin % build_url({'mode': 'kodi_refresh'})))
+					set_properties({'fen.external': 'true'})
+				info_tag = listitem.getVideoInfoTag()
+				info_tag.setMediaType('episode')
+				info_tag.setTitle(display)
+				info_tag.setOriginalTitle(orig_title)
+				info_tag.setTvShowTitle(title)
+				info_tag.setTvShowStatus(show_status)
+				info_tag.setSeason(season)
+				info_tag.setEpisode(episode)
+				info_tag.setPlot(item_get('plot') or '...')
+				info_tag.setYear(int(year))
+				info_tag.setRating(item_get('rating'))
+				info_tag.setVotes(item_get('votes'))
+				info_tag.setMpaa(mpaa)
+				info_tag.setCountries(country)
+				info_tag.setDuration(item_get('duration'))
+				info_tag.setTrailer(trailer)
+				info_tag.setFirstAired(premiered)
+				info_tag.setStudios((studio or '',))
+				info_tag.setUniqueIDs({'imdb': imdb_id, 'tmdb': string(tmdb_id), 'tvdb': string(tvdb_id)})
+				info_tag.setIMDBNumber(imdb_id)
+				info_tag.setGenres(genre.split(', '))
+				info_tag.setWriters(item_get('writer').split(', '))
+				info_tag.setDirectors(item_get('director').split(', '))
+				info_tag.setCast([xbmc_actor(name=item['name'], role=item['role'], thumbnail=item['thumbnail']) for item in cast + item_get('guest_stars', [])])
+				info_tag.setPlaycount(playcount)
+				if progress and not unaired:
+					info_tag.setResumePoint(float(progress))
+					set_properties({'WatchedProgress': progress})
+				listitem.setLabel(display)
+				listitem.addContextMenuItems(cm)
+				item_thumb = tmdb_thumb if tmdb_thumb is not None else show_poster
+				listitem.setArt({'poster': item_thumb, 'fanart': show_fanart, 'thumb': thumb, 'icon':thumb, 'banner': show_banner, 'clearart': show_clearart,
+								'clearlogo': show_clearlogo, 'landscape': show_landscape, 'season.poster': season_poster, 'tvshow.poster': show_poster,
+								'tvshow.clearart': show_clearart, 'tvshow.clearlogo': show_clearlogo, 'tvshow.landscape': show_landscape, 'tvshow.banner': show_banner})
+				set_properties({'fen.extras_params': extras_params, 'fen.options_params': options_params, 'fen.unwatched_params': unwatched_params,
+								'fen.watched_params': watched_params, 'fen.clearprog_params': clearprog_params, 'episode_type': episode_type})
+				yield (url_params, listitem, False)
+			except: pass
+	handle, is_external, category_name = int(sys.argv[1]), external(), episodes_str
+	item_list = []
+	append = item_list.append		
+	meta_user_info, watched_indicators, show_unaired, adjust_hours = metadata_user_info(), watched_indicators_info(), show_unaired_info(), date_offset_info()
+	current_date, watched_info, bookmarks = get_datetime_function(), get_watched_info(watched_indicators), get_bookmarks(watched_indicators, 'episode')
+	watched_title = trakt_str if watched_indicators == 1 else fen_str
+	fanart_enabled, hide_watched = meta_user_info['extra_fanart_enabled'], is_external and meta_user_info['widget_hide_watched']
+	meta = tv_meta_function('tmdb_id', params.get('tmdb_id'), meta_user_info, current_date)
+	meta_get = meta.get
+	tmdb_id, tvdb_id, imdb_id, tvshow_plot, orig_title = meta_get('tmdb_id'), meta_get('tvdb_id'), meta_get('imdb_id'), meta_get('plot'), meta_get('original_title')
+	title, show_year, rootname, show_duration, show_status = meta_get('title'), meta_get('year') or '2050', meta_get('rootname'), meta_get('duration'), meta_get('status')
+	cast, mpaa, trailer, genre, studio, country = meta_get('cast', []), meta_get('mpaa'), string(meta_get('trailer')), meta_get('genre'), meta_get('studio'), meta_get('country')
+	season = params['season']
+	poster_main, poster_backup, fanart_main, fanart_backup, clearlogo_main, clearlogo_backup = get_art_provider()
+	fanart_default = poster_main == 'poster2'
+	show_poster = meta_get('custom_poster') or meta_get(poster_main) or meta_get(poster_backup) or poster_empty
+	show_fanart = meta_get('custom_fanart') or meta_get(fanart_main) or meta_get(fanart_backup) or fanart_empty
+	show_clearlogo = meta_get('custom_clearlogo') or meta_get(clearlogo_main) or meta_get(clearlogo_backup) or ''
+	if fanart_enabled:
+		season_art = meta_get('season_art', {})
+		show_banner = meta_get('custom_banner') or meta_get('banner') or ''
+		show_clearart = meta_get('custom_clearart') or meta_get('clearart') or ''
+		show_landscape = meta_get('custom_landscape') or meta_get('landscape') or ''
+	else: show_banner, show_clearart, show_landscape = '', '', ''
+	if season == 'all':
+		episodes_data = all_episodes_meta_function(meta, meta_user_info, show_specials())
+		season_poster = show_poster
+	else:
+		episodes_data = episodes_meta_function(season, meta, meta_user_info)
+		try:
+			poster_path = [i['poster_path'] for i in meta_get('season_data') if i['season_number'] == int(season)][0]
+			tmdb_poster = '%s%s%s' % (tmdb_poster_prefix, meta_user_info['image_resolution']['poster'], poster_path) if poster_path is not None else show_poster
+		except: tmdb_poster = show_poster
+		if fanart_default: season_poster = season_art.get('seasonposter_%s' % season, '') or tmdb_poster
+		else: season_poster = tmdb_poster
+	add_items(handle, list(_process()))
+	set_sort_method(handle, content_type)
+	category_name = '%s %s' % (season_str, season)
+	set_content(handle, content_type)
+	set_category(handle, category_name)
+	end_directory(handle, False if is_external else None)
+	set_view_mode(list_view, content_type, is_external)
 
-try:
-    #from infotagger.listitem import ListItemInfoTag
-    from resources.lib.modules.listitem import ListItemInfoTag
-except:
-    pass
-
-from resources.lib.modules import bookmarks
-from resources.lib.modules import control
-from resources.lib.modules import cache
-from resources.lib.modules import playcount
-from resources.lib.modules import views
-
-params = dict(urllib_parse.parse_qsl(sys.argv[2].replace('?',''))) if len(sys.argv) > 1 else dict()
-action = params.get('action')
-control.moderator()
-kodi_version = control.getKodiVersion()
-
-class seasons:
-    def __init__(self):
-        self.list = []
-        self.datetime = datetime.datetime.utcnow()
-        self.today_date = self.datetime.strftime('%Y-%m-%d')
-        self.addon_caching = control.setting('addon.caching') or 'true'
-        self.lang = 'en' if control.setting('info.language') == 'English' else 'el'
-        self.shownoyear = control.setting('show.noyear') or 'false'
-
-    def get(self, tvshowtitle, year, imdb, tmdb, meta, idx=True, create_directory=True):
-        try:
-            root        = None
-            filename    = imdb + '.xml'
-
-            if cache.file_exists(filename, 'coverapi') and cache.file_time(filename, 'coverapi', True):
-                root = cache.open_xml(filename, 'coverapi')
-            
-            #Try to refresh the cachefile
-            else:
-                cache.get_coverapi_data(imdb, 'tv')
-                root = cache.open_xml(filename, 'coverapi')
-
-            if (root is None):
-                raise Exception()
-            
-            for value in root.findall('season'):
-                title = value.findtext('title')
-                season = value.findtext('number')
-                self.list.append({'title': title, 'season': season, 'year': year, 'imdb': imdb, 'tmdb': tmdb, 'tvdb': '0', 'meta': meta})
-
-            if create_directory == True:
-                self.seasonDirectory(self.list)
-            
-            return self.list
-        except:
-            #log_utils.log('get', 1)
-            pass
-
-    def seasonDirectory(self, items):
-        if items == None or len(items) == 0:
-            control.idle()
-            #sys.exit()
-        sysaddon = sys.argv[0]
-        syshandle = int(sys.argv[1])
-        addonPoster = control.addonPoster()
-        addonBanner = control.addonBanner()
-        addonFanart = control.addonFanart()
-        settingFanart = control.setting('fanart')
-        try:
-            indicators = playcount.getSeasonIndicators(items[0]['imdb'])
-        except:
-            pass
-        watchedMenu = 'Mark as Watched'
-        unwatchedMenu = 'Mark as Unwatched'
-        
-        for i in items:
-            try:
-                label = i['title']
-                year = i['year']
-                season = i['season']
-                label = '%s (%s)' % (label, year)
-                
-                systitle = sysname = urllib_parse.quote_plus(i['title'])
-                meta = json.loads(i['meta'])
-                
-                poster = meta['poster'] if 'poster' in meta else ''
-                descr = meta['descr'] if 'descr' in meta else ''
-                
-                fanart = poster
-                banner1 = poster
-                banner = banner1 or fanart or addonBanner
-                landscape = fanart
-                
-                ep_meta = {'poster': poster, 'fanart': fanart, 'banner': banner, 'clearlogo': poster, 'clearart': poster, 'landscape': landscape, 'duration': '45', 'status': ''}
-                sysmeta = urllib_parse.quote_plus(json.dumps(ep_meta))
-                imdb, tvdb, tmdb, year, season, fanart, duration, status = i['imdb'], i['tvdb'], i['tmdb'], i['year'], i['season'], fanart, '45', ''
-                meta = dict((k,v) for k, v in six.iteritems(i) if not v == '0')
-                meta.update({'mediatype': 'tvshow'})
-                meta.update({'code': tmdb, 'imdbnumber': imdb, 'imdb_id': imdb, 'tvdb_id': tvdb})
-                meta.update({'trailer': '%s?action=trailer&name=%s&tmdb=%s&imdb=%s&season=%s' % (sysaddon, systitle, tmdb, imdb, season)})
-                
-                if not 'duration' in i:
-                    meta.update({'duration': '60'})
-                elif i['duration'] == '0':
-                    meta.update({'duration': '60'})
-                try:
-                    meta.update({'duration': str(int(meta['duration']) * 60)})
-                except:
-                    pass
-                try:
-                    seasonYear = i['year']
-                    meta.update({'year': seasonYear})
-                except:
-                    pass
-                meta.update({'plot': descr})
-                cm = []
-                cm.append(('Clean Tools Widget', 'RunPlugin(%s?action=cleantools_widget)' % sysaddon))
-                cm.append(('Queue Item', 'RunPlugin(%s?action=queue_item)' % sysaddon))
-                cm.append(('Add to Library', 'RunPlugin(%s?action=tvshow_to_library&tvshowtitle=%s&year=%s&imdb=%s&tmdb=%s)' % (sysaddon, systitle, year, imdb, tmdb)))
-                if kodi_version < 17:
-                    cm.append(('Information', 'Action(Info)'))
-                try:
-                    overlay = int(playcount.getSeasonOverlay(indicators, imdb, season))
-                    if overlay == 7:
-                        cm.append((unwatchedMenu, 'RunPlugin(%s?action=tvshows_playcount&name=%s&imdb=%s&tmdb=%s&season=%s&query=6)' % (sysaddon, systitle, imdb, tmdb, season)))
-                        meta.update({'playcount': 1, 'overlay': 7})
-                    else:
-                        cm.append((watchedMenu, 'RunPlugin(%s?action=tvshows_playcount&name=%s&imdb=%s&tmdb=%s&season=%s&query=7)' % (sysaddon, systitle, imdb, tmdb, season)))
-                        meta.update({'playcount': 0, 'overlay': 6})
-                except:
-                    pass
-                try:
-                    item = control.item(label=label, offscreen=True)
-                except:
-                    item = control.item(label=label)
-                art = {}
-                art.update({'icon': poster, 'thumb': poster, 'poster': poster, 'banner': banner, 'landscape': landscape})
-                if settingFanart == 'true':
-                    art.update({'fanart': fanart})
-                elif not addonFanart == None:
-                    art.update({'fanart': addonFanart})
-                if 'clearlogo' in i and not i['clearlogo'] == '0':
-                    art.update({'clearlogo': i['clearlogo']})
-                if 'clearart' in i and not i['clearart'] == '0':
-                    art.update({'clearart': i['clearart']})
-                item.setArt(art)
-                item.addContextMenuItems(cm)
-                if kodi_version >= 20:
-                    info_tag = ListItemInfoTag(item, 'video')
-                castwiththumb = i.get('castwiththumb')
-                if castwiththumb and not castwiththumb == '0':
-                    if kodi_version >= 18:
-                        if kodi_version >= 20:
-                            info_tag.set_cast(castwiththumb)
-                        else:
-                            item.setCast(castwiththumb)
-                    else:
-                        cast = [(p['name'], p['role']) for p in castwiththumb]
-                        meta.update({'cast': cast})
-                if kodi_version >= 20:
-                    info_tag.set_info(control.metadataClean(meta))
-                else:
-                    item.setInfo(type='Video', infoLabels=control.metadataClean(meta))
-                video_streaminfo = {'codec': 'h264'}
-                if kodi_version >= 20:
-                    info_tag.add_stream_info('video', video_streaminfo)
-                else:
-                    item.addStreamInfo('video', video_streaminfo)
-                url = '%s?action=episodes&year=%s&imdb=%s&tmdb=%s&meta=%s&season=%s' % (sysaddon, year, imdb, tmdb, sysmeta, season)
-                
-                control.addItem(handle=syshandle, url=url, listitem=item, isFolder=True)
-                
-            except:
-                #log_utils.log('seasonDirectory', 1)
-                pass
-        try:
-            control.property(syshandle, 'showplot', items[0]['plot'])
-        except:
-            #log_utils.log('seasonDirectory', 1)
-            pass
-        control.content(syshandle, 'seasons')
-        control.directory(syshandle, cacheToDisc=True)
-        views.setView('seasons', {'skin.aeon.nox.silvo' : 50, 'skin.estuary': 55, 'skin.confluence': 500}) #View 50 List #View 501 LowList
-
-
-class episodes:
-    def __init__(self):
-        self.list = []
-        self.datetime = datetime.datetime.utcnow()
-        self.systime = self.datetime.strftime('%Y%m%d%H%M%S%f')
-        self.today_date = self.datetime.strftime('%Y-%m-%d')
-        self.addon_caching = control.setting('addon.caching') or 'true'
-        self.episode_thumbs = control.setting('episode.thumbs') or 'false'
-        self.episode_views = control.setting('episode.views') or 'false'
-        self.shownoyear = control.setting('show.noyear') or 'false'
-
-    def get(self, imdb, tmdb, season, year, meta):
-        
-        try:
-            root        = None
-            filename    = imdb + '.xml'
-            season      = int(season)
-
-            if cache.file_exists(filename, 'coverapi') and cache.file_time(filename, 'coverapi', True):
-                root = cache.open_xml(filename, 'coverapi')
-            
-            #Try to refresh the cachefile
-            else:
-                cache.get_coverapi_data(imdb, 'tv')
-                root = cache.open_xml(filename, 'coverapi')
-            
-            if (root is None):
-                raise Exception()
-            
-            for value in root.findall('season'):
-                season_ = int(value.findtext('number'))
-                
-                if ( season_ != season):
-                    continue
-
-                epiz = value.find('episodes')
-
-                for epis in epiz.findall('episode'):
-                    e_title = epis.findtext('title')
-                    
-                    epi_ = epis.findtext('number')
-                    episode_url = epis.findtext('link')
-                    self.list.append({'title': e_title, 'episode': epi_, 'season': season_, 'year': year, 'link': episode_url, 'imdb': imdb, 'tmdb': tmdb, 'tvdb': '0', 'meta': meta})
-            
-            self.episodeDirectory(self.list)
-            
-            return self.list
-        except:
-            #log_utils.log('get', 1)
-            pass
-
-    def episodeDirectory(self, items):
-        
-        if items == None or len(items) == 0:
-            control.idle()
-            #sys.exit()
-        
-        sysaddon = sys.argv[0]
-        syshandle = int(sys.argv[1])
-        isPlayable = True
-        indicators = playcount.getTVShowIndicators(refresh=True)
-
-        try:
-            multi = [i['title'] for i in items]
-        except:
-            multi = []
-        multi = len([x for y,x in enumerate(multi) if x not in multi[:y]])
-        multi = True if multi > 1 else False
-        try:
-            sysaction = items[0]['action']
-        except:
-            sysaction = ''
-        isFolder = False
-        watchedMenu = 'Mark as Watched'
-        unwatchedMenu = 'Mark as Unwatched'
-        playbackMenu = 'Auto Play'
-
-        for i in items:
-            
-            try:
-                if not 'label' in i:
-                    i['label'] = i['title']
-                if i['label'] == '0':
-                    label = '%sx%02d . %s %s' % (i['season'], int(i['episode']), 'Episode', i['episode'])
-                else:
-                    label = '%sx%02d . %s' % (i['season'], int(i['episode']), i['title'])
-                if multi == True:
-                    label = '%s - %s' % (i['title'], label)
-
-                imdb, tvdb, tmdb, year, season, episode = i['imdb'], i['tvdb'], i['tmdb'], i['year'], i['season'], i['episode']
-                meta = json.loads(i['meta'])
-                poster = meta['poster'] if 'poster' in meta else ''
-                descr = meta['descr'] if 'descr' in meta else ''
-                
-                fanart = poster
-                banner1 = poster
-                banner = banner1
-                landscape = fanart
-                seasons_meta = {'poster': poster, 'fanart': fanart, 'banner': banner, 'clearlogo': banner, 'clearart': banner, 'landscape': landscape, 'duration': '45', 'status': 'aired'}
-                
-                seas_meta = urllib_parse.quote_plus(json.dumps(seasons_meta))
-                systitle = urllib_parse.quote_plus(i['title'])
-                systvshowtitle = urllib_parse.quote_plus(i['title'])
-                syspremiered = urllib_parse.quote_plus(i['year'])
-                meta = dict((k,v) for k, v in six.iteritems(i) if not v == '0')
-                
-                meta.update({'mediatype': 'episode'})
-                
-                meta.update({'code': tmdb, 'imdbnumber': imdb})
-                meta.update({'trailer': '%s?action=trailer&name=%s&tmdb=%s&imdb=%s&season=%s&episode=%s' % (sysaddon, systvshowtitle, tmdb, imdb, season, episode)})
-                
-                if not 'duration' in i:
-                    meta.update({'duration': '45'})
-                elif i['duration'] == '0':
-                    meta.update({'duration': '45'})
-                try:
-                    meta.update({'duration': str(int(meta['duration']) * 60)})
-                except:
-                    pass
-                
-                try:
-                    meta.update({'year': i['year'] })
-                except:
-                    pass
-                try:
-                    meta.update({'title': i['title']})
-                except:
-                    pass
-                try:
-                    meta.update({'tvshowyear': i['year']}) # Kodi uses the year (the year the show started) as the year for the episode. Change it from the premiered date.
-                except:
-                    pass
-                
-                meta.update({'poster': poster, 'fanart': fanart, 'banner': banner})
-                sysmeta = urllib_parse.quote_plus(json.dumps(meta))
-                url = '%s?action=play&title=%s&year=%s&imdb=%s&tmdb=%s&tvdb=%s&season=%s&episode=%s&tvshowtitle=%s&premiered=%s&meta=%s&t=%s' % (sysaddon, systitle, year, imdb, tmdb, tvdb, season, episode, systvshowtitle, syspremiered, sysmeta, self.systime)
-                
-                sysurl = urllib_parse.quote_plus(url)
-                path = '%s?action=play&title=%s&year=%s&imdb=%s&tmdb=%s&tvdb=%s&season=%s&episode=%s&tvshowtitle=%s&premiered=%s' % (sysaddon, systitle, year, imdb, tmdb, tvdb, season, episode, systvshowtitle, syspremiered)
-                
-                fileurl = i['link']
-
-                if isFolder == True:
-                    url = '%s?action=episodes&tvshowtitle=%s&year=%s&imdb=%s&tmdb=%s&meta=%s&season=%s&episode=%s' % (sysaddon, systvshowtitle, year, imdb, tmdb, seas_meta, season, episode)
-                else:
-                    url = '%s?action=play&type=tv&title=%s&year=%s&imdb=%s&tmdb=%s&meta=%s&t=%s&fileurl=%s&season=%s&episode=%s' % (sysaddon, systitle, year, imdb, tmdb, sysmeta, self.systime, urllib_parse.quote_plus(fileurl), season, episode)
-                sysurl = urllib_parse.quote_plus(url)
-                cm = []
-                cm.append(('Clean Tools Widget', 'RunPlugin(%s?action=cleantools_widget)' % sysaddon))
-                cm.append(('Clear Providers', 'RunPlugin(%s?action=clear_sources)' % sysaddon))
-                if multi == True:
-                    cm.append(('Browse Series', 'Container.Update(%s?action=seasons&tvshowtitle=%s&year=%s&imdb=%s&tmdb=%s&meta=%s,return)' % (sysaddon, systvshowtitle, year, imdb, tmdb, seas_meta)))
-                cm.append(('Queue Item', 'RunPlugin(%s?action=queue_item)' % sysaddon))
-                cm.append(('Add to Library', 'RunPlugin(%s?action=tvshow_to_library&tvshowtitle=%s&year=%s&imdb=%s&tmdb=%s)' % (sysaddon, systvshowtitle, year, imdb, tmdb)))
-                
-                if kodi_version < 17:
-                    cm.append(('Information', 'Action(Info)'))
-                try:
-                    overlay = int(playcount.getEpisodeOverlay(indicators, imdb, tmdb, season, episode))
-                    if overlay == 7:
-                        cm.append((unwatchedMenu, 'RunPlugin(%s?action=episodes_playcount&imdb=%s&tmdb=%s&season=%s&episode=%s&query=6)' % (sysaddon, imdb, tmdb, season, episode)))
-                        meta.update({'playcount': 1, 'overlay': 7})
-                    else:
-                        cm.append((watchedMenu, 'RunPlugin(%s?action=episodes_playcount&imdb=%s&tmdb=%s&season=%s&episode=%s&query=7)' % (sysaddon, imdb, tmdb, season, episode)))
-                        meta.update({'playcount': 0, 'overlay': 6})
-                except:
-                    pass
-                
-                if isFolder == False:
-                    cm.append((playbackMenu, 'RunPlugin(%s?action=alter_sources&url=%s&meta=%s)' % (sysaddon, sysurl, sysmeta)))
-                try:
-                    item = control.item(label=label, offscreen=True)
-                except:
-                    item = control.item(label=label)
-                art = {}
-                thumb = poster
-                
-                clearlogo = meta.get('clearlogo', '')
-                clearart = meta.get('clearart', '')
-                art.update({'icon': thumb, 'thumb': thumb, 'banner': banner, 'poster': thumb, 'tvshow.poster': poster, 'season.poster': poster, 'landscape': landscape, 'clearlogo': clearlogo, 'clearart': clearart})
-                art.update({'fanart': fanart})
-                item.setArt(art)
-                item.addContextMenuItems(cm)
-                
-                if isPlayable:
-                    item.setProperty('IsPlayable', 'true')
-                
-                offset = bookmarks.get('episode', imdb, season, episode)
-                
-                if float(offset) > 120:
-                    percentPlayed = int(float(offset) / float(meta['duration']) * 100)
-                    item.setProperty('resumetime', str(offset))
-                    item.setProperty('percentplayed', str(percentPlayed))
-                
-                if kodi_version >= 20:
-                    info_tag = ListItemInfoTag(item, 'video')
-                castwiththumb = False
-                if castwiththumb and not castwiththumb == '0':
-                    if kodi_version >= 18:
-                        if kodi_version >= 20:
-                            info_tag.set_cast(castwiththumb)
-                        else:
-                            item.setCast(castwiththumb)
-                    else:
-                        cast = [(p['name'], p['role']) for p in castwiththumb]
-                        meta.update({'cast': cast})
-                if kodi_version >= 20:
-                    info_tag.set_info(control.metadataClean(meta))
-                else:
-                    item.setInfo(type='Video', infoLabels=control.metadataClean(meta))
-                video_streaminfo = {'codec': 'h264'}
-                if kodi_version >= 20:
-                    info_tag.add_stream_info('video', video_streaminfo)
-                else:
-                    item.addStreamInfo('video', video_streaminfo)
-                control.addItem(handle=syshandle, url=url, listitem=item, isFolder=isFolder)
-            except:
-                #log_utils.log('episodeDirectory', 1)
-                pass
-        if self.episode_views == 'true':
-            control.content(syshandle, 'seasons')
-            control.directory(syshandle, cacheToDisc=True)
-            views.setView('seasons', {'skin.aeon.nox.silvo' : 50, 'skin.estuary': 55, 'skin.confluence': 500}) #View 50 List #View 501 LowList
-        else:
-            control.content(syshandle, 'episodes')
-            control.directory(syshandle, cacheToDisc=True)
-            views.setView('episodes', {'skin.aeon.nox.silvo' : 50, 'skin.estuary': 55, 'skin.confluence': 504}) #View 50 List #View 501 LowList
-
-
-    def addDirectory(self, items, queue=False):
-        if items == None or len(items) == 0:
-            control.idle()
-            #sys.exit()
-        sysaddon = sys.argv[0]
-        syshandle = int(sys.argv[1])
-        addonFanart = control.addonFanart()
-        addonThumb = control.addonThumb()
-        artPath = control.artPath()
-        for i in items:
-            try:
-                name = i['name']
-                if i['image'].startswith('http'):
-                    thumb = i['image']
-                elif not artPath == None:
-                    thumb = os.path.join(artPath, i['image'])
-                else:
-                    thumb = addonThumb
-                url = '%s?action=%s' % (sysaddon, i['action'])
-                try:
-                    url += '&url=%s' % urllib_parse.quote_plus(i['url'])
-                except:
-                    pass
-                cm = []
-                cm.append(('Clean Tools Widget', 'RunPlugin(%s?action=cleantools_widget)' % sysaddon))
-                if queue == True:
-                    cm.append(('Queue Item', 'RunPlugin(%s?action=queue_item)' % sysaddon))
-                try:
-                    item = control.item(label=name, offscreen=True)
-                except:
-                    item = control.item(label=name)
-                item.setArt({'icon': thumb, 'thumb': thumb, 'fanart': addonFanart})
-                item.addContextMenuItems(cm)
-                control.addItem(handle=syshandle, url=url, listitem=item, isFolder=True)
-            except:
-                #log_utils.log('addDirectory', 1)
-                pass
-        control.content(syshandle, 'addons')
-        control.directory(syshandle, cacheToDisc=True)
-
-
+def build_single_episode(list_type, params={}):
+	def _get_category_name():
+		cat_name = category_name_dict[list_type]
+		if isinstance(cat_name, dict): cat_name = cat_name[params.get('recently_aired')]
+		return cat_name
+	def _process(_position, ep_data):
+		try:
+			ep_data_get = ep_data.get
+			meta = tv_meta_function('trakt_dict', ep_data_get('media_ids'), meta_user_info, current_date)
+			if not meta: return
+			meta_get = meta.get
+			cm = []
+			cm_append = cm.append
+			listitem = make_listitem()
+			set_properties = listitem.setProperties
+			orig_season, orig_episode = ep_data_get('season'), ep_data_get('episode')
+			unwatched = ep_data_get('unwatched', False)
+			season_data = meta_get('season_data')
+			if list_type_starts_with('next_'):
+				if orig_episode == 0: orig_episode = 1
+				else:
+					try:
+						episode_count = [i for i in season_data if i['season_number'] == orig_season][0]['episode_count']
+						if orig_episode >= episode_count:
+							orig_season, orig_episode = orig_season + 1, 1
+							if orig_season > meta_get('total_seasons'): return
+						else: orig_episode = orig_episode + 1
+					except: return
+			episodes_data = episodes_meta_function(orig_season, meta, meta_user_info)
+			try: item = [i for i in episodes_data if i['episode'] == orig_episode][0]
+			except: return
+			item_get = item.get
+			season, episode, ep_name = item_get('season'), item_get('episode'), item_get('title')
+			episode_date, premiered = adjust_premiered_date_function(item_get('premiered'), adjust_hours)
+			episode_type = item_get('episode_type') or ''
+			if not episode_date or current_date < episode_date:
+				if list_type_starts_with('next_'):
+					if not episode_date: return
+					if not nextep_include_unaired: return
+					if episode_date and not date_difference_function(current_date, episode_date, 7): return
+				elif not show_unaired: return
+				unaired = True
+			else: unaired = False
+			tmdb_id, tvdb_id, imdb_id, title, show_year = meta_get('tmdb_id'), meta_get('tvdb_id'), meta_get('imdb_id'), meta_get('title'), meta_get('year') or '2050'
+			orig_title, rootname, trailer, genre, studio = meta_get('original_title'), meta_get('rootname'), string(meta_get('trailer')), meta_get('genre'), meta_get('studio')
+			cast, mpaa, tvshow_plot, show_status = meta_get('cast', []), meta_get('mpaa'), meta_get('plot'), meta_get('status')
+			show_poster = meta_get('custom_poster') or meta_get(poster_main) or meta_get(poster_backup) or poster_empty
+			show_fanart = meta_get('custom_fanart') or meta_get(fanart_main) or meta_get(fanart_backup) or fanart_empty
+			show_clearlogo = meta_get('custom_clearlogo') or meta_get(clearlogo_main) or meta_get(clearlogo_backup) or ''
+			tmdb_thumb = item_get('thumb', None)
+			try: year = premiered.split('-')[0]
+			except: year = show_year or '2050'
+			try:
+				poster_path = [i['poster_path'] for i in season_data if i['season_number'] == int(season)][0]
+				tmdb_poster = '%s%s%s' % (tmdb_poster_prefix, meta_user_info['image_resolution']['poster'], poster_path) if poster_path is not None else show_poster
+			except: tmdb_poster = show_poster
+			if fanart_enabled:
+				season_art = meta_get('season_art', {})
+				show_banner = meta_get('custom_banner') or meta_get('banner') or ''
+				show_clearart = meta_get('custom_clearart') or meta_get('clearart') or ''
+				show_landscape = meta_get('custom_landscape') or meta_get('landscape') or ''
+				if fanart_default:
+					season_poster = season_art.get('seasonposter_%s' % season, '') or tmdb_poster
+					thumb = tmdb_thumb or season_art.get('seasonthumb_%s' % season, '') or show_fanart
+				else:
+					season_poster = tmdb_poster or season_art.get('seasonposter_%s' % orig_season, '')
+					thumb = tmdb_thumb or show_fanart or season_art.get('seasonthumb_%s' % season, '')
+			else: show_banner, show_clearart, show_landscape, season_art, season_poster, thumb = '', '', '', {}, tmdb_poster, tmdb_thumb or show_fanart
+			(playcount, overlay), progress = get_watched_status(watched_info, string(tmdb_id), season, episode), get_progress_percent(bookmarks, tmdb_id, season, episode)
+			str_season_zfill2, str_episode_zfill2 = string(season).zfill(2), string(episode).zfill(2)
+			if display_title == 0: title_string = '%s: ' % title
+			else: title_string = ''
+			if display_title in (0,1): seas_ep = '%sx%s - ' % (str_season_zfill2, str_episode_zfill2)
+			else: seas_ep = ''
+			if list_type_starts_with('next_'):
+				display_premiered = make_day_function(current_date, episode_date, date_format) if episode_date else 'UNKNOWN'
+				if nextep_include_airdate: airdate = '[COLOR %s][%s][/COLOR] ' % (fen_highlight, display_premiered)
+				else: airdate = ''
+				highlight_color = nextep_unwatched_color if unwatched else nextep_unaired_color if unaired else ''
+				italics_open, italics_close = ('[I]', '[/I]') if highlight_color else ('', '')
+				if highlight_color: episode_info = '%s[COLOR%s]%s%s[/COLOR]%s' % (italics_open, highlight_color, seas_ep, ep_name, italics_close)
+				else: episode_info = '%s%s%s%s' % (italics_open, seas_ep, ep_name, italics_close)
+				display = '%s%s%s' % (airdate, upper(title_string), episode_info)
+			elif list_type_compare == 'trakt_calendar':
+				if episode_date: display_premiered = make_day_function(current_date, episode_date, date_format)
+				else: display_premiered = 'UNKNOWN'
+				display = '[%s] %s%s%s' % (display_premiered, upper(title_string), seas_ep, ep_name)
+				if unaired:
+					displays = display.split(']')
+					display = '[COLOR %s]%s][/COLOR]%s' % (fen_highlight, displays[0], displays[1])
+			else:
+				color_tags = ('[COLOR %s]' % fen_highlight, '[/COLOR]') if unaired else ('', '')
+				display = '%s%s%s%s%s' % (upper(title_string), color_tags[0], seas_ep, ep_name, color_tags[1])
+			if not item_get('duration'): item['duration'] = meta_get('duration')
+			options_params = build_url({'mode': 'options_menu_choice', 'content': list_type, 'tmdb_id': tmdb_id, 'season': season, 'episode': episode,
+										'poster': show_poster, 'playcount': playcount, 'progress': progress, 'is_external': is_external, 'in_progress_menu': 'true'})
+			extras_params = build_url({'mode': 'extras_menu_choice', 'tmdb_id': tmdb_id, 'media_type': 'episode', 'is_external': is_external})
+			play_options_params = build_url({'mode': 'playback_choice', 'media_type': 'episode', 'poster': show_poster, 'meta': tmdb_id, 'season': season, 'episode': episode})
+			url_params = build_url({'mode': 'playback.media', 'media_type': 'episode', 'tmdb_id': tmdb_id, 'season': season, 'episode': episode})
+			cm_append((extras_str, run_plugin % extras_params))
+			cm_append((options_str, run_plugin % options_params))
+			cm_append((play_options_str, run_plugin % play_options_params))
+			clearprog_params, unwatched_params, watched_params = '', '', ''
+			if not unaired:
+				if playcount:
+					if hide_watched: return
+					unwatched_params = build_url({'mode': 'watched_status.mark_episode', 'action': 'mark_as_unwatched', 'tmdb_id': tmdb_id,
+												'tvdb_id': tvdb_id, 'season': season, 'episode': episode,  'title': title})
+					cm_append((unwatched_str % watched_title, run_plugin % unwatched_params))
+				else:
+					watched_params = build_url({'mode': 'watched_status.mark_episode', 'action': 'mark_as_watched', 'tmdb_id': tmdb_id,
+												'tvdb_id': tvdb_id, 'season': season, 'episode': episode,  'title': title})
+					cm_append((watched_str % watched_title, run_plugin % watched_params))
+				if progress:
+					clearprog_params = build_url({'mode': 'watched_status.erase_bookmark', 'media_type': 'episode', 'tmdb_id': tmdb_id,
+												'season': season, 'episode': episode, 'refresh': 'true'})
+					cm_append((clearprog_str, run_plugin % clearprog_params))
+			if is_external:
+				cm_append((refr_widg_str, run_plugin % build_url({'mode': 'kodi_refresh'})))
+				set_properties({'fen.external': 'true'})
+			info_tag = listitem.getVideoInfoTag()
+			info_tag.setMediaType('episode')
+			info_tag.setTitle(display)
+			info_tag.setOriginalTitle(orig_title)
+			info_tag.setTvShowTitle(title)
+			info_tag.setTvShowStatus(show_status)
+			info_tag.setSeason(season)
+			info_tag.setEpisode(episode)
+			info_tag.setPlot(item_get('plot') or tvshow_plot)
+			info_tag.setYear(int(year))
+			info_tag.setRating(item_get('rating'))
+			info_tag.setVotes(item_get('votes'))
+			info_tag.setMpaa(mpaa)
+			info_tag.setCountries(meta_get('country', []))
+			info_tag.setDuration(item_get('duration'))
+			info_tag.setTrailer(trailer)
+			info_tag.setFirstAired(premiered)
+			info_tag.setStudios((studio or '',))
+			info_tag.setUniqueIDs({'imdb': imdb_id, 'tmdb': string(tmdb_id), 'tvdb': string(tvdb_id)})
+			info_tag.setIMDBNumber(imdb_id)
+			info_tag.setGenres(genre.split(', '))
+			info_tag.setWriters(item_get('writer').split(', '))
+			info_tag.setDirectors(item_get('director').split(', '))
+			info_tag.setCast([xbmc_actor(name=item['name'], role=item['role'], thumbnail=item['thumbnail']) for item in cast + item_get('guest_stars', [])])
+			info_tag.setPlaycount(playcount)
+			if progress and not unaired:
+				info_tag.setResumePoint(float(progress))
+				set_properties({'WatchedProgress': progress})
+			listitem.setLabel(display)
+			listitem.addContextMenuItems(cm)
+			listitem.setArt({'poster': show_poster, 'fanart': show_fanart, 'thumb': thumb, 'icon':thumb, 'banner': show_banner, 'clearart': show_clearart, 'clearlogo': show_clearlogo,
+							'landscape': show_landscape, 'season.poster': season_poster, 'tvshow.poster': show_poster, 'tvshow.clearart': show_clearart,
+							'tvshow.clearlogo': show_clearlogo, 'tvshow.landscape': show_landscape, 'tvshow.banner': show_banner})
+			set_properties({'fen.extras_params': extras_params, 'fen.options_params': options_params, 'fen.unwatched_params': unwatched_params,
+							'fen.watched_params': watched_params, 'fen.clearprog_params': clearprog_params, 'episode_type': episode_type})
+			item_list_append({'list_items': (url_params, listitem, False), 'first_aired': premiered, 'name': '%s - %sx%s' % (title, str_season_zfill2, str_episode_zfill2),
+							'unaired': unaired, 'last_played': ep_data_get('last_played', resinsert), 'sort_order': string(_position)})
+		except: pass
+	handle, is_external, category_name = int(sys.argv[1]), external(), episodes_str
+	item_list, unwatched = [], []
+	resinsert, fen_highlight = '', get_property('fen.main_highlight')
+	item_list_append = item_list.append
+	display_title, date_format, art_keys, all_episodes = single_ep_display_title(), single_ep_format(), get_art_provider(), default_all_episodes()
+	meta_user_info, watched_indicators, show_unaired = metadata_user_info(), watched_indicators_info(), show_unaired_info()
+	current_date, adjust_hours, ignore_articles_setting = get_datetime_function(), date_offset_info(), ignore_articles()
+	watched_info, bookmarks, watched_title = get_watched_info(watched_indicators), get_bookmarks(watched_indicators, 'episode'), trakt_str if watched_indicators == 1 else fen_str
+	fanart_enabled, hide_watched, show_all_episodes = meta_user_info['extra_fanart_enabled'], is_external and meta_user_info['widget_hide_watched'], all_episodes in (1, 2)
+	poster_main, poster_backup, fanart_main, fanart_backup, clearlogo_main, clearlogo_backup = art_keys
+	fanart_default = poster_main == 'poster2'
+	category_name = _get_category_name()
+	if list_type == 'episode.next':
+		nextep_settings, nextep_disp_settings = nextep_content_settings(), nextep_display_settings()
+		nextep_unaired_color, nextep_unwatched_color = nextep_disp_settings['unaired_color'], nextep_disp_settings['unwatched_color']
+		nextep_include_airdate, nextep_include_unaired = nextep_disp_settings['include_airdate'], nextep_settings['include_unaired']
+		include_unwatched = nextep_settings['include_unwatched']
+		data = get_next_episodes(watched_info)
+		if watched_indicators == 1:
+			resformat, resinsert = '%Y-%m-%dT%H:%M:%S.%fZ', '2000-01-01T00:00:00.000Z'
+			list_type = 'episode.next_trakt'
+		else:
+			resformat, resinsert = '%Y-%m-%d %H:%M:%S', '2000-01-01 00:00:00'
+			list_type = 'episode.next_fen'
+		hidden_data = get_hidden_progress_items(watched_indicators)
+		data = [i for i in data if not i['media_ids']['tmdb'] in hidden_data]
+		if include_unwatched != 0:
+			if include_unwatched in (1, 3):
+				try:
+					original_list = trakt_watchlist('watchlist', 'tvshow')
+					unwatched.extend([{'media_ids': i['media_ids'], 'season': 1, 'episode': 0, 'unwatched': True, 'title': i['title']} \
+								for i in original_list])
+				except: pass
+			if include_unwatched in (2, 3):
+				try: unwatched.extend([{'media_ids': {'tmdb': int(i['tmdb_id'])}, 'season': 1, 'episode': 0, 'unwatched': True, 'title': i['title']} \
+									for i in favorites.get_favorites('tvshow') if not int(i['tmdb_id']) in [x['media_ids']['tmdb'] for x in data]])
+				except: pass
+			data += unwatched
+	elif list_type == 'episode.progress': data = get_in_progress_episodes()
+	elif list_type == 'episode.recently_watched': data = get_recently_watched('episode')
+	else:#episode.trakt
+		recently_aired = params.get('recently_aired', None)
+		data = trakt_get_my_calendar(recently_aired, get_datetime_function())
+		list_type = 'episode.trakt_recently_aired' if recently_aired else 'episode.trakt_calendar'
+		try: data = sorted(data, key=lambda i: (i['sort_title'], i.get('first_aired', '2100-12-31')), reverse=True)
+		except: data = sorted(data, key=lambda i: (i['sort_title']), reverse=True)
+	list_type_compare = list_type.split('episode.')[1]
+	list_type_starts_with = list_type_compare.startswith
+	threads = list(make_thread_list_enumerate(_process, data))
+	[i.join() for i in threads]
+	if list_type_starts_with('next_'):
+		def func(function):
+			if sort_key == 'name': return title_key_function(function, ignore_articles_setting)
+			elif sort_key == 'last_played': return jsondate_to_datetime_function(function, resformat)
+			else: return function
+		sort_key = nextep_settings['sort_key']
+		sort_direction = nextep_settings['sort_direction']
+		if nextep_settings['sort_airing_today_to_top']:
+			try:
+				airing_today = [i for i in item_list
+								if date_difference_function(current_date, jsondate_to_datetime_function(i.get('first_aired', '2100-12-31'), '%Y-%m-%d').date(), 0)]
+			except: pass
+			remainder = [i for i in item_list if not i in airing_today]
+			remainder = sorted(remainder, key=lambda i: func(i[sort_key]), reverse=sort_direction)
+			unaired = [i for i in remainder if i['unaired']]
+			aired = [i for i in remainder if not i in unaired]
+			remainder = aired + unaired
+			item_list = airing_today + remainder
+		else:
+			item_list = sorted(item_list, key=lambda i: func(i[sort_key]), reverse=sort_direction)
+			unaired = [i for i in item_list if i['unaired']]
+			aired = [i for i in item_list if not i in unaired]
+			item_list = aired + unaired
+	else:
+		item_list.sort(key=lambda i: i['sort_order'])
+		if list_type_compare in ('trakt_calendar', 'trakt_recently_aired'):
+			if list_type_compare == 'trakt_calendar': reverse = calendar_sort_order() == 0
+			else: reverse = True
+			try: item_list = sorted(item_list, key=lambda i: i.get('first_aired', '2100-12-31'), reverse=reverse)
+			except:
+				item_list = [i for i in item_list if i.get('first_aired') not in (None, 'None', '')]
+				item_list = sorted(item_list, key=lambda i: i.get('first_aired'), reverse=reverse)
+	add_items(handle, [i['list_items'] for i in item_list])
+	set_content(handle, content_type)
+	set_category(handle, category_name)
+	end_directory(handle, cacheToDisc=False)
+	set_view_mode(single_view, content_type, is_external)

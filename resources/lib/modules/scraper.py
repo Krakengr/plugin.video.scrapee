@@ -2,6 +2,8 @@ import logging
 import random
 import time
 import re
+from modules import kodi_utils
+logger = kodi_utils.logger
 '''''''''
 Disables InsecureRequestWarning: Unverified HTTPS request is being made warnings.
 '''''''''
@@ -58,7 +60,6 @@ class CloudflareScraper(Session):
 
     def request(self, method, url, *args, **kwargs):
         resp = super(CloudflareScraper, self).request(method, url, *args, **kwargs)
-
         # Check if Cloudflare anti-bot is on
         if ( resp.status_code == 503
              and resp.headers.get("Server", "").startswith("cloudflare")

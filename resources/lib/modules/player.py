@@ -1,421 +1,493 @@
 # -*- coding: utf-8 -*-
-
 import re
 import os
-import sys
-import base64
-import codecs
-import gzip
+import time
+from kodi_six import xbmcaddon, xbmcvfs
+from apis.opensubtitles_api import OpenSubtitlesAPI
+from apis.trakt_api import make_trakt_slug
+from modules import kodi_utils as ku, settings as st, watched_status as ws, source_utils as su
+from modules.utils import sec2time
+logger = ku.logger
 
-from kodi_six import xbmc
-import simplejson as json
-import six
-from six.moves import urllib_parse, xmlrpc_client
+openFile = xbmcvfs.File
+makeFile = xbmcvfs.mkdir
+deleteFile = xbmcvfs.delete
+deleteDir = xbmcvfs.rmdir
+listDir = xbmcvfs.listdir
 
-try:
-    #from infotagger.listitem import ListItemInfoTag
-    from resources.lib.modules.listitem import ListItemInfoTag
-except:
-    pass
+set_property, clear_property, convert_language, get_visibility, hide_busy_dialog = ku.set_property, ku.clear_property, ku.convert_language, ku.get_visibility, ku.hide_busy_dialog
+Thread, json, ls, xbmc_player, translate_path, execute_builtin, sleep = ku.Thread, ku.json, ku.local_string, ku.xbmc_player, ku.translate_path, ku.execute_builtin, ku.sleep
+make_listitem, volume_checker, list_dirs, get_setting, get_infolabel = ku.make_listitem, ku.volume_checker, ku.list_dirs, ku.get_setting, ku.get_infolabel
+close_all_dialog, notification, select_dialog, poster_empty, fanart_empty = ku.close_all_dialog, ku.notification, ku.select_dialog, ku.empty_poster, ku.addon_fanart
+auto_nextep_settings, disable_content_lookup, playback_settings = st.auto_nextep_settings, st.disable_content_lookup, st.playback_settings
+get_art_provider, get_fanart_data, watched_indicators, auto_resume = st.get_art_provider, st.get_fanart_data, st.watched_indicators, st.auto_resume
+clear_local_bookmarks, set_bookmark, mark_movie, mark_episode = ws.clear_local_bookmarks, ws.set_bookmark, ws.mark_movie, ws.mark_episode
+xbmc_actor = ku.xbmc_actor
+total_time_errors = ('0.0', '', 0.0, None)
+video_fullscreen_check = 'Window.IsActive(fullscreenvideo)'
 
-from resources.lib.modules import bookmarks
-from resources.lib.modules import control
-from resources.lib.modules import cleantitle
-from resources.lib.modules import playcount
-from resources.lib.modules import history
+class FenPlayer(xbmc_player):
+	def __init__ (self):
+		xbmc_player.__init__(self)
 
-try:
-    import resolveurl
-except:
-    pass
+	def run(self, url=None, obj=None):
+		hide_busy_dialog()
+		self.clear_playback_properties()
+		if not url: return self.run_error()
+		try: return self.play_video(url, obj)
+		except: return self.run_error()
 
-kodi_version = control.getKodiVersion()
+	def play_video(self, url, obj):
+		self.set_constants(url, obj)
+		volume_checker()
+		self.play(self.url, self.make_listing())
+		if not self.is_generic:
+			self.check_playback_start()
+			if self.playback_successful: self.monitor()
+			else:
+				self.sources_object.playback_successful = self.playback_successful
+				self.sources_object.cancel_all_playback = self.cancel_all_playback
+				if self.cancel_all_playback: self.kill_dialog()
+				self.stop()
+			try: del self.kodi_monitor
+			except: pass
 
+	def check_playback_start(self):
+		if not self.monitor_playback: self.playback_successful = True
+		resolve_percent = 0
+		while self.playback_successful is None:
+			hide_busy_dialog()
+			if not self.sources_object.progress_dialog: self.playback_successful = True
+			elif self.sources_object.progress_dialog.skip_resolved(): self.playback_successful = False
+			elif self.sources_object.progress_dialog.iscanceled() or self.kodi_monitor.abortRequested(): self.cancel_all_playback, self.playback_successful = True, False
+			elif resolve_percent >= 100: self.playback_successful = False
+			elif get_visibility('Window.IsTopMost(okdialog)'):
+				execute_builtin('SendClick(okdialog, 11)')
+				self.playback_successful = False
+			elif self.isPlayingVideo():
+				try:
+					if self.getTotalTime() not in total_time_errors and get_visibility(video_fullscreen_check): self.playback_successful = True
+				except: pass
+			resolve_percent = round(resolve_percent + 26.0/100, 1)
+			self.sources_object.progress_dialog.update_resolver(percent=resolve_percent)
+			sleep(100)
 
-def playItem(url):
-    try:
-        if resolveurl.HostedMediaFile(url):
-            url = resolveurl.resolve(url)
-        item = control.item(path=url)
-        item.setProperty('IsPlayable', 'true')
-        control.player.play(url, item)
-    except:
-        control.infoDialog('Error : No Stream Available.', sound=False, icon='INFO')
-        return
+	def playback_close_dialogs(self):
+		if self.monitor_playback:
+			self.sources_object.playback_successful = True
+			self.kill_dialog()
+			sleep(200)
+			close_all_dialog()
 
+	def monitor(self):
+		try:
+			ensure_dialog_dead, total_check_time = False, 0
+			if self.media_type == 'episode':
+				play_random_continual = self.sources_object.random_continual
+				play_random = self.sources_object.random
+				disable_autoplay_next_episode = self.sources_object.disable_autoplay_next_episode
+				if disable_autoplay_next_episode: notification('%s - %s %s' % (ls(32135), ls(32178), ls(32736)), 4500)
+				if any((play_random_continual, play_random, disable_autoplay_next_episode)): self.autoplay_nextep = False
+				else: self.autoplay_nextep = self.sources_object.autoplay_nextep
+			else: play_random_continual, self.autoplay_nextep = False, False
+			while total_check_time <= 30 and not get_visibility(video_fullscreen_check):
+				sleep(250)
+				total_check_time += 0.25
+			hide_busy_dialog()
+			sleep(1000)
+			while self.isPlayingVideo():
+				try:
+					try: self.total_time, self.curr_time = self.getTotalTime(), self.getTime()
+					except: sleep(250); continue
+					if not ensure_dialog_dead:
+						ensure_dialog_dead = True
+						self.playback_close_dialogs()
+					sleep(1000)
+					self.current_point = round(float(self.curr_time/self.total_time * 100), 1)
+					if self.current_point >= self.set_watched:
+						if play_random_continual: self.run_random_continual(); break
+						if not self.media_marked: self.media_watched_marker()
+					if self.autoplay_nextep:
+						if not self.nextep_info_gathered: self.info_next_ep()
+						if round(self.total_time - self.curr_time) <= self.start_prep: self.run_next_ep(); break
+					if self.has_subs:
+						self.subs_searched = True
+					if not self.subs_searched: self.get_subtitles()
+					if not self.subs_searched: self.run_subtitles()
+				except: pass
+			hide_busy_dialog()
+			if not self.media_marked: self.media_watched_marker()
+			self.clear_playback_properties()
+			clear_local_bookmarks()
+		except:
+			hide_busy_dialog()
+			self.sources_object.playback_successful = False
+			self.sources_object.cancel_all_playback = True
+			return self.kill_dialog()
 
-def playMedia(url):
-    try:
-        if resolveurl.HostedMediaFile(url):
-            url = resolveurl.resolve(url)
-        control.execute('PlayMedia(%s)' % url)
-    except:
-        control.infoDialog('Error : No Stream Available.', sound=False, icon='INFO')
-        return
+	def make_listing(self):
+		listitem = make_listitem()
+		listitem.setPath(self.url)
+		if self.disable_lookup: listitem.setContentLookup(False)
+		if self.is_generic:
+			info_tag = listitem.getVideoInfoTag()
+			info_tag.setMediaType('video')
+			info_tag.setFilenameAndPath(self.url)
+		else:
+			self.tmdb_id, self.imdb_id, self.tvdb_id = self.meta_get('tmdb_id', ''), self.meta_get('imdb_id', ''), self.meta_get('tvdb_id', '')
+			self.media_type, self.title, self.year = self.meta_get('media_type'), self.meta_get('title'), self.meta_get('year')
+			self.season, self.episode = self.meta_get('season', ''), self.meta_get('episode', '')
+			self.auto_resume, self.fanart_enabled = auto_resume(self.media_type), get_fanart_data()
+			poster_main, poster_backup, fanart_main, fanart_backup, clearlogo_main, clearlogo_backup = get_art_provider()
+			poster = self.meta_get('custom_poster') or self.meta_get(poster_main) or self.meta_get(poster_backup) or poster_empty
+			fanart = self.meta_get('custom_fanart') or self.meta_get(fanart_main) or self.meta_get(fanart_backup) or fanart_empty
+			clearlogo = self.meta_get('custom_clearlogo') or self.meta_get(clearlogo_main) or self.meta_get(clearlogo_backup) or ''
+			if self.fanart_enabled:
+				banner = self.meta_get('custom_banner') or self.meta_get('banner') or ''
+				clearart = self.meta_get('custom_clearart') or self.meta_get('clearart') or ''
+				landscape = self.meta_get('custom_landscape') or self.meta_get('landscape') or ''
+			else: banner, clearart, landscape = '', '', ''
+			duration, plot, genre, trailer, mpaa = self.meta_get('duration'), self.meta_get('plot'), self.meta_get('genre', ''), self.meta_get('trailer'), self.meta_get('mpaa')
+			rating, votes = self.meta_get('rating'), self.meta_get('votes')
+			premiered, studio, tagline = self.meta_get('premiered'), self.meta_get('studio', ''), self.meta_get('tagline')
+			director, writer, cast, country = self.meta_get('director', ''), self.meta_get('writer', ''), self.meta_get('cast', []), self.meta_get('country', '')
+			listitem.setLabel(self.title)
+			if self.media_type == 'movie':
+				if self.fanart_enabled:
+					discart = self.meta_get('custom_discart') or self.meta_get('discart') or ''
+					keyart = self.meta_get('custom_keyart') or self.meta_get('keyart') or ''
+				else: discart, keyart = '', ''
+				listitem.setArt({'poster': poster, 'fanart': fanart, 'icon': poster, 'banner': banner, 'clearart': clearart,
+								'clearlogo': clearlogo, 'landscape': landscape, 'thumb': landscape, 'discart': discart, 'keyart': keyart})
+				info_tag = listitem.getVideoInfoTag()
+				info_tag.setMediaType('movie')
+				info_tag.setTitle(self.title)
+				info_tag.setOriginalTitle(self.meta_get('original_title'))
+				info_tag.setPlot(plot)
+				info_tag.setYear(int(self.year))
+				info_tag.setRating(rating)
+				info_tag.setVotes(votes)
+				info_tag.setMpaa(mpaa)
+				info_tag.setDuration(duration)
+				info_tag.setCountries(country)
+				info_tag.setTrailer(trailer)
+				info_tag.setPremiered(premiered)
+				info_tag.setTagLine(tagline)
+				info_tag.setStudios((studio or '',))
+				info_tag.setUniqueIDs({'imdb': self.imdb_id, 'tmdb': str(self.tmdb_id)})
+				info_tag.setIMDBNumber(self.imdb_id)
+				info_tag.setGenres(genre.split(', '))
+				info_tag.setWriters(writer.split(', '))
+				info_tag.setDirectors(director.split(', '))
+				info_tag.setCast([xbmc_actor(name=item['name'], role=item['role'], thumbnail=item['thumbnail']) for item in cast])
+			else:
+				listitem.setArt({'poster': poster, 'fanart': fanart, 'icon': poster, 'banner': banner, 'clearart': clearart, 'clearlogo': clearlogo, 'thumb': landscape,
+								'landscape': landscape, 'tvshow.poster': poster, 'tvshow.clearart': clearart, 'tvshow.clearlogo': clearlogo})
+				info_tag = listitem.getVideoInfoTag()
+				info_tag.setMediaType('episode')
+				info_tag.setTitle(self.meta_get('ep_name'))
+				info_tag.setOriginalTitle(self.meta_get('original_title'))
+				info_tag.setTvShowTitle(self.title)
+				info_tag.setTvShowStatus(self.meta_get('status'))
+				info_tag.setSeason(self.season)
+				info_tag.setEpisode(self.episode)
+				info_tag.setPlot(plot)
+				info_tag.setYear(int(self.year))
+				info_tag.setRating(rating)
+				info_tag.setVotes(votes)
+				info_tag.setMpaa(mpaa)
+				info_tag.setDuration(duration)
+				info_tag.setTrailer(trailer)
+				info_tag.setFirstAired(premiered)
+				info_tag.setStudios((studio or '',))
+				info_tag.setUniqueIDs({'imdb': self.imdb_id, 'tmdb': str(self.tmdb_id), 'tvdb': str(self.tvdb_id)})
+				info_tag.setIMDBNumber(self.imdb_id)
+				info_tag.setGenres(genre.split(', '))
+				info_tag.setWriters(writer.split(', '))
+				info_tag.setDirectors(director.split(', '))
+				info_tag.setCast([xbmc_actor(name=item['name'], role=item['role'], thumbnail=item['thumbnail']) for item in cast])
+				info_tag.setFilenameAndPath(self.url)
+			self.set_resume_point(listitem)
+			self.set_playback_properties()
+		return listitem
 
+	def media_watched_marker(self, force_watched=False):
+		self.media_marked = True
+		try:
+			if self.current_point >= self.set_watched or force_watched:
+				if self.media_type == 'movie': watched_function = mark_movie
+				else: watched_function = mark_episode
+				watched_params = {'action': 'mark_as_watched', 'tmdb_id': self.tmdb_id, 'title': self.title, 'year': self.year, 'season': self.season, 'episode': self.episode,
+									'tvdb_id': self.tvdb_id, 'from_playback': 'true'}
+				Thread(target=self.run_media_progress, args=(watched_function, watched_params)).start()
+			else:
+				clear_property('fen.random_episode_history')
+				if self.current_point >= self.set_resume:
+					progress_params = {'media_type': self.media_type, 'tmdb_id': self.tmdb_id, 'curr_time': self.curr_time, 'total_time': self.total_time,
+									'title': self.title, 'season': self.season, 'episode': self.episode, 'from_playback': 'true'}
+					Thread(target=self.run_media_progress, args=(set_bookmark, progress_params)).start()
+		except: pass
 
-class player(xbmc.Player):
-    def __init__ (self):
-        xbmc.Player.__init__(self)
+	def run_media_progress(self, function, params):
+		try: function(params)
+		except: pass
 
-    def run(self, title, year, season, episode, imdb, tmdb, tvdb, url, meta):
-        try:
-            control.sleep(200)
-            self.totalTime = 0
-            self.currentTime = 0
-            self.content = 'movie' if season == None or episode == None else 'episode'
-            self.title = title
-            self.year = year
-            self.name = urllib_parse.quote_plus(title) + urllib_parse.quote_plus(' (%s)' % year) if self.content == 'movie' else urllib_parse.quote_plus(title) + urllib_parse.quote_plus(' S%01dE%01d' % (int(season), int(episode)))
-            self.name = urllib_parse.unquote_plus(self.name)
-            self.season = '%01d' % int(season) if self.content == 'episode' else None
-            self.episode = '%01d' % int(episode) if self.content == 'episode' else None
-            self.DBID = None
-            self.imdb = imdb if not imdb == None else '0'
-            self.tmdb = tmdb if not tmdb == None else '0'
-            self.tvdb = tvdb if not tvdb == None else '0'
-            self.ids = {'imdb': self.imdb, 'tmdb': self.tmdb, 'tvdb': self.tvdb}
-            self.ids = dict((k,v) for k, v in six.iteritems(self.ids) if not v == '0')
-            self.offset = bookmarks.get(self.content, imdb, season, episode)
-            poster, thumb, fanart, clearlogo, clearart, discart, meta = self.getMeta(meta)
-            item = control.item(path=url)
-            if self.content == 'movie':
-                item.setArt({'icon': thumb, 'thumb': thumb, 'poster': poster, 'fanart': fanart, 'clearlogo': clearlogo, 'clearart': clearart, 'discart': discart})
-            else:
-                item.setArt({'icon': thumb, 'thumb': thumb, 'tvshow.poster': poster, 'season.poster': poster, 'fanart': fanart, 'clearlogo': clearlogo, 'clearart': clearart})
-            if kodi_version >= 20:
-                info_tag = ListItemInfoTag(item, 'video')
-                info_tag.set_info(control.metadataClean(meta))
-            else:
-                item.setInfo(type='Video', infoLabels=control.metadataClean(meta))
-            if 'plugin' in control.infoLabel('Container.PluginName'):
-                control.player.play(url, item)
-            control.resolve(int(sys.argv[1]), True, item)
-            control.window.setProperty('script.trakt.ids', json.dumps(self.ids))
-            self.keepPlaybackAlive()
-            control.window.clearProperty('script.trakt.ids')
-        except:
-            return
+	def run_next_ep(self):
+		from modules.episode_tools import EpisodeTools
+		if not self.media_marked: self.media_watched_marker(force_watched=True)
+		EpisodeTools(self.meta, self.nextep_settings).auto_nextep()
 
+	def run_random_continual(self):
+		from modules.episode_tools import EpisodeTools
+		if not self.media_marked: self.media_watched_marker(force_watched=True)
+		EpisodeTools(self.meta).play_random_continual(False)
 
-    def getMeta(self, meta):
-        try:
-            poster = meta.get('poster', '') or control.addonPoster()
-            thumb = meta.get('thumb', '') or poster
-            fanart = meta.get('fanart', '') or control.addonFanart()
-            clearlogo = meta.get('clearlogo', '') or ''
-            clearart = meta.get('clearart', '') or ''
-            discart = meta.get('discart', '') or ''
-            return poster, thumb, fanart, clearlogo, clearart, discart, meta
-        except:
-            pass
-        try:
-            if not self.content == 'movie':
-                raise Exception()
-            meta = control.jsonrpc('{"jsonrpc": "2.0", "method": "VideoLibrary.GetMovies", "params": {"filter":{"or": [{"field": "year", "operator": "is", "value": "%s"}, {"field": "year", "operator": "is", "value": "%s"}, {"field": "year", "operator": "is", "value": "%s"}]}, "properties" : ["title", "originaltitle", "year", "genre", "studio", "country", "runtime", "rating", "votes", "mpaa", "director", "writer", "plot", "plotoutline", "tagline", "thumbnail", "file"]}, "id": 1}' % (self.year, str(int(self.year)+1), str(int(self.year)-1)))
-            meta = six.ensure_text(meta, errors='ignore')
-            meta = json.loads(meta)['result']['movies']
-            t = cleantitle.get(self.title)
-            meta = [i for i in meta if self.year == str(i['year']) and (t == cleantitle.get(i['title']) or t == cleantitle.get(i['originaltitle']))][0]
-            for k, v in six.iteritems(meta):
-                if type(v) == list:
-                    try:
-                        meta[k] = str(' / '.join([six.ensure_str(i) for i in v]))
-                    except:
-                        meta[k] = ''
-                else:
-                    try:
-                        meta[k] = str(six.ensure_str(v))
-                    except:
-                        meta[k] = str(v)
-            if not 'plugin' in control.infoLabel('Container.PluginName'):
-                self.DBID = meta['movieid']
-            poster = thumb = meta['thumbnail']
-            return poster, thumb, '', '', '', '', meta
-        except:
-            pass
-        try:
-            if not self.content == 'episode':
-                raise Exception()
-            meta = control.jsonrpc('{"jsonrpc": "2.0", "method": "VideoLibrary.GetTVShows", "params": {"filter":{"or": [{"field": "year", "operator": "is", "value": "%s"}, {"field": "year", "operator": "is", "value": "%s"}, {"field": "year", "operator": "is", "value": "%s"}]}, "properties" : ["title", "year", "thumbnail", "file"]}, "id": 1}' % (self.year, str(int(self.year)+1), str(int(self.year)-1)))
-            meta = six.ensure_text(meta, errors='ignore')
-            meta = json.loads(meta)['result']['tvshows']
-            t = cleantitle.get(self.title)
-            meta = [i for i in meta if self.year == str(i['year']) and t == cleantitle.get(i['title'])][0]
-            tvshowid = meta['tvshowid'] ; poster = meta['thumbnail']
-            meta = control.jsonrpc('{"jsonrpc": "2.0", "method": "VideoLibrary.GetEpisodes", "params":{ "tvshowid": %d, "filter":{"and": [{"field": "season", "operator": "is", "value": "%s"}, {"field": "episode", "operator": "is", "value": "%s"}]}, "properties": ["title", "season", "episode", "showtitle", "firstaired", "runtime", "rating", "director", "writer", "plot", "thumbnail", "file"]}, "id": 1}' % (tvshowid, self.season, self.episode))
-            meta = six.ensure_text(meta, errors='ignore')
-            meta = json.loads(meta)['result']['episodes'][0]
-            for k, v in six.iteritems(meta):
-                if type(v) == list:
-                    try:
-                        meta[k] = str(' / '.join([six.ensure_str(i) for i in v]))
-                    except:
-                        meta[k] = ''
-                else:
-                    try:
-                        meta[k] = str(six.ensure_str(v))
-                    except:
-                        meta[k] = str(v)
-            if not 'plugin' in control.infoLabel('Container.PluginName'):
-                self.DBID = meta['episodeid']
-            thumb = meta['thumbnail']
-            return poster, thumb, '', '', '', '', meta
-        except:
-            pass
-        poster, thumb, fanart, clearlogo, clearart, discart, meta = '', '', '', '', '', '', {'title': self.name}
-        return poster, thumb, fanart, clearlogo, clearart, discart, meta
+	def get_subtitles(self):
+		self.language = get_setting('fen.subs.language_primary')
+		self.secondary = get_setting('fen.subs.language_secondary')
+		subtitle_path = get_setting('fen.subtitles_download_directory')
+		home = xbmcaddon.Addon().getAddonInfo('path')
+		self.quality = ['bluray', 'hdrip', 'brrip', 'bdrip', 'dvdrip', 'webdl', 'webrip', 'webcap', 'web', 'hdtv', 'hdrip']
+		url = 'https://subs.whvx.net/search?id=' + str(self.imdb_id)
+		file_folder = 'resources/subtitles/'
+		file_path = os.path.join(home, file_folder)
+		subtitle_path = translate_path('special://temp/')
+		temp_zip = os.path.join(subtitle_path, 'temp.zip')
 
-
-    def keepPlaybackAlive(self):
-        pname = '%s.player.overlay' % control.addonInfo('id')
-        control.window.clearProperty(pname)
-        if self.content == 'movie':
-            overlay = playcount.getMovieOverlay(playcount.getMovieIndicators(), self.imdb)
-        elif self.content == 'episode':
-            overlay = playcount.getEpisodeOverlay(playcount.getTVShowIndicators(), self.imdb, self.tmdb, self.season, self.episode)
-        else:
-            overlay = '6'
-        for i in range(0, 240):
-            if self.isPlayingVideo():
-                break
-            xbmc.sleep(1000)
-        if overlay == '7':
-            while self.isPlayingVideo():
-                try:
-                    self.totalTime = self.getTotalTime()
-                    self.currentTime = self.getTime()
-                except:
-                    pass
-                xbmc.sleep(2000)
-        elif self.content == 'movie':
-            while self.isPlayingVideo():
-                try:
-                    self.totalTime = self.getTotalTime()
-                    self.currentTime = self.getTime()
-                    watcher = (self.currentTime / self.totalTime >= .92)
-                    property = control.window.getProperty(pname)
-                    if watcher == True and not property == '7':
-                        control.window.setProperty(pname, '7')
-                        playcount.markMovieDuringPlayback(self.imdb, '7')
-                    elif watcher == False and not property == '6':
-                        control.window.setProperty(pname, '6')
-                        playcount.markMovieDuringPlayback(self.imdb, '6')
-                except:
-                    pass
-                xbmc.sleep(2000)
-        elif self.content == 'episode':
-            while self.isPlayingVideo():
-                try:
-                    self.totalTime = self.getTotalTime()
-                    self.currentTime = self.getTime()
-                    watcher = (self.currentTime / self.totalTime >= .92)
-                    property = control.window.getProperty(pname)
-                    if watcher == True and not property == '7':
-                        control.window.setProperty(pname, '7')
-                        playcount.markEpisodeDuringPlayback(self.imdb, self.tmdb, self.season, self.episode, '7')
-                    elif watcher == False and not property == '6':
-                        control.window.setProperty(pname, '6')
-                        playcount.markEpisodeDuringPlayback(self.imdb, self.tmdb, self.season, self.episode, '6')
-                except:
-                    pass
-                xbmc.sleep(2000)
-        control.window.clearProperty(pname)
-
-
-    def libForPlayback(self):
-        try:
-            if self.DBID == None:
-                raise Exception()
-            if self.content == 'movie':
-                rpc = '{"jsonrpc": "2.0", "method": "VideoLibrary.SetMovieDetails", "params": {"movieid" : %s, "playcount" : 1 }, "id": 1 }' % str(self.DBID)
-            elif self.content == 'episode':
-                rpc = '{"jsonrpc": "2.0", "method": "VideoLibrary.SetEpisodeDetails", "params": {"episodeid" : %s, "playcount" : 1 }, "id": 1 }' % str(self.DBID)
-            control.jsonrpc(rpc)
-            control.refresh()
-        except:
-            pass
-
-
-    def idleForPlayback(self):
-        for i in range(0, 400):
-            if control.condVisibility('Window.IsActive(busydialog)') == 1 or control.condVisibility('Window.IsActive(busydialognocancel)') == 1:
-                control.idle()
-            else:
-                control.execute('Dialog.Close(all,true)')
-                break
-            control.sleep(100)
-
-
-    def onAVStarted(self):
-        control.execute('Dialog.Close(all,true)')
-        if control.setting('bookmarks') == 'true' and int(self.offset) > 120 and self.isPlayingVideo():
-            if control.setting('bookmarks.auto') == 'true':
-                self.seekTime(float(self.offset))
-            else:
-                self.pause()
-                minutes, seconds = divmod(float(self.offset), 60)
-                hours, minutes = divmod(minutes, 60)
-                label = '%02d:%02d:%02d' % (hours, minutes, seconds)
-                label = control.lang2(12022).format(label)
-                if control.setting('bookmarks.source') == '1' and trakt.getTraktCredentialsInfo() == True:
-                    label += '[CR]  (Trakt)'
-                yes = control.yesnoDialog(label, heading=control.lang2(13404))
-                if yes:
-                    self.seekTime(float(self.offset))
-                control.sleep(1000)
-                self.pause()
-        #subtitles().get(self.name, self.imdb, self.season, self.episode)
-        self.idleForPlayback()
-
-
-    def onPlayBackStarted(self):
-        if kodi_version < 18:
-            control.execute('Dialog.Close(all,true)')
-            if control.setting('bookmarks') == 'true' and int(self.offset) > 120 and self.isPlayingVideo():
-                if control.setting('bookmarks.auto') == 'true':
-                    self.seekTime(float(self.offset))
-                else:
-                    self.pause()
-                    minutes, seconds = divmod(float(self.offset), 60)
-                    hours, minutes = divmod(minutes, 60)
-                    label = '%02d:%02d:%02d' % (hours, minutes, seconds)
-                    label = six.ensure_str(control.lang2(12022).format(label))
-                    yes = control.yesnoDialog(label, heading=control.lang2(13404))
-                    if yes:
-                        self.seekTime(float(self.offset))
-                    control.sleep(1000)
-                    self.pause()
-            subtitles().get(self.name, self.imdb, self.season, self.episode)
-            self.idleForPlayback()
-        else:
-            pass
-            #self.onAVStarted()
-
-
-    def onPlayBackStopped(self):
-        if self.totalTime == 0 or self.currentTime == 0:
-            control.sleep(2000)
-            return
-        bookmarks.reset(self.currentTime, self.totalTime, self.content, self.imdb, self.season, self.episode)
-        if float(self.currentTime / self.totalTime) >= 0.92:
-            self.libForPlayback()
-
-
-    def onPlayBackEnded(self):
-        self.libForPlayback()
-        self.onPlayBackStopped()
-        if control.setting('crefresh') == 'true':
-            control.refresh()
-
-
-class subtitles:
-    def get(self, name, imdb, season, episode):
-        try:
-            if not control.setting('subtitles') == 'true':
-                raise Exception()
-            langDict = {'Afrikaans': 'afr', 'Albanian': 'alb', 'Arabic': 'ara',
+		if self.media_type != 'movie':
+			url += '&season=' + str(self.season) + '&episode=' + str(self.episode)
+		content = su.get_link(url)
+		try:
+			data_json = json.loads(content)
+		except:
+			return
+		
+		#Translate lang keys to Fen keys
+		langDict = {'af': 'afr', 'al': 'alb', 'ar': 'ara',
                 'Armenian': 'arm', 'Basque': 'baq', 'Bengali': 'ben',
-                'Bosnian': 'bos', 'Breton': 'bre', 'Bulgarian': 'bul',
+                'bs': 'bos', 'Breton': 'bre', 'bg': 'bul',
                 'Burmese': 'bur', 'Catalan': 'cat', 'Chinese': 'chi',
-                'Croatian': 'hrv', 'Czech': 'cze', 'Danish': 'dan',
-                'Dutch': 'dut', 'English': 'eng', 'Esperanto': 'epo',
+                'hr': 'hrv', 'Czech': 'cze', 'Danish': 'dan',
+                'nl': 'dut', 'en': 'eng', 'Esperanto': 'epo',
                 'Estonian': 'est', 'Finnish': 'fin', 'French': 'fre',
                 'Galician': 'glg', 'Georgian': 'geo', 'German': 'ger',
-                'Greek': 'ell', 'Hebrew': 'heb', 'Hindi': 'hin',
-                'Hungarian': 'hun', 'Icelandic': 'ice', 'Indonesian': 'ind',
+                'el': 'ell', 'Hebrew': 'heb', 'Hindi': 'hin',
+                'hu': 'hun', 'Icelandic': 'ice', 'id': 'ind',
                 'Italian': 'ita', 'Japanese': 'jpn', 'Kazakh': 'kaz',
-                'Khmer': 'khm', 'Korean': 'kor', 'Latvian': 'lav',
+                'Khmer': 'khm', 'ko': 'kor', 'Latvian': 'lav',
                 'Lithuanian': 'lit', 'Luxembourgish': 'ltz', 'Macedonian': 'mac',
                 'Malay': 'may', 'Malayalam': 'mal', 'Manipuri': 'mni',
-                'Mongolian': 'mon', 'Montenegrin': 'mne', 'Norwegian': 'nor',
-                'Occitan': 'oci', 'Persian': 'per', 'Polish': 'pol',
-                'Portuguese': 'por,pob', 'Portuguese(Brazil)': 'pob,por',
-                'Romanian': 'rum', 'Russian': 'rus', 'Serbian': 'scc',
-                'Sinhalese': 'sin', 'Slovak': 'slo', 'Slovenian': 'slv',
-                'Spanish': 'spa', 'Swahili': 'swa', 'Swedish': 'swe',
+                'Mongolian': 'mon', 'Montenegrin': 'mne', 'no': 'nor',
+                'Occitan': 'oci', 'Persian': 'per', 'pl': 'pol',
+                'Portuguese': 'por', 'pb': 'pob',
+                'ro': 'rum', 'ru': 'rus', 'Serbian': 'scc',
+                'Sinhalese': 'sin', 'sk': 'slo', 'sl': 'slv',
+                'es': 'spa', 'Swahili': 'swa', 'Swedish': 'swe',
                 'Syriac': 'syr', 'Tagalog': 'tgl', 'Tamil': 'tam', 'Telugu': 'tel',
-                'Thai': 'tha', 'Turkish': 'tur', 'Ukrainian': 'ukr', 'Urdu': 'urd'
+                'Thai': 'tha', 'tr': 'tur', 'Ukrainian': 'ukr', 'Urdu': 'urd'
             }
-            codePageDict = {'ara': 'cp1256', 'ar': 'cp1256', 'ell': 'cp1253',
-                'el': 'cp1253', 'heb': 'cp1255', 'he': 'cp1255', 'tur': 'cp1254',
-                'tr': 'cp1254', 'rus': 'cp1251', 'ru': 'cp1251'
-            }
-            quality = ['bluray', 'hdrip', 'brrip', 'bdrip', 'dvdrip', 'webrip', 'hdtv']
-            langs = []
-            try:
-                try:
-                    langs = langDict[control.setting('subtitles.lang.1')].split(',')
-                except:
-                    langs.append(langDict[control.setting('subtitles.lang.1')])
-            except:
-                pass
-            try:
-                try:
-                    langs = langs + langDict[control.setting('subtitles.lang.2')].split(',')
-                except:
-                    langs.append(langDict[control.setting('subtitles.lang.2')])
-            except:
-                pass
-            try:
-                subLang = xbmc.Player().getSubtitles()
-            except:
-                subLang = ''
-            if subLang == langs[0]:
-                raise Exception()
-            un = control.setting('os.user')
-            pw = control.setting('os.pass')
-            server = xmlrpc_client.Server('http://api.opensubtitles.org/xml-rpc', verbose=0)
-            token = server.LogIn(un, pw, 'en', 'XBMC_Subtitles_Unofficial_v5.2.14')['token']
-            sublanguageid = ','.join(langs) ; imdbid = re.sub('[^0-9]', '', imdb)
-            if not (season == None or episode == None):
-                result = server.SearchSubtitles(token, [{'sublanguageid': sublanguageid, 'imdbid': imdbid, 'season': season, 'episode': episode}])['data']
-                fmt = ['hdtv']
-            else:
-                result = server.SearchSubtitles(token, [{'sublanguageid': sublanguageid, 'imdbid': imdbid}])['data']
-                try:
-                    vidPath = xbmc.Player().getPlayingFile()
-                except:
-                    vidPath = ''
-                fmt = re.split('\.|\(|\)|\[|\]|\s|\-', vidPath)
-                fmt = [i.lower() for i in fmt]
-                fmt = [i for i in fmt if i in quality]
-            filter = []
-            result = [i for i in result if i['SubSumCD'] == '1']
-            for lang in langs:
-                filter += [i for i in result if i['SubLanguageID'] == lang and any(x in i['MovieReleaseName'].lower() for x in fmt)]
-                filter += [i for i in result if i['SubLanguageID'] == lang and any(x in i['MovieReleaseName'].lower() for x in quality)]
-                filter += [i for i in result if i['SubLanguageID'] == lang]
-            try:
-                lang = xbmc.convertLanguage(filter[0]['SubLanguageID'], xbmc.ISO_639_1)
-            except:
-                lang = filter[0]['SubLanguageID']
-            subname = str(filter[0]['SubFileName'])
-            content = [filter[0]['IDSubtitleFile'],]
-            content = server.DownloadSubtitles(token, content)
-            content = base64.b64decode(content['data'][0]['data'])
-            content = gzip.GzipFile(fileobj=six.BytesIO(content)).read()
-            subtitle = control.transPath('special://temp/')
-            subtitle = os.path.join(subtitle, 'TemporarySubs.%s.srt' % lang)
-            codepage = codePageDict.get(lang, '')
-            if codepage and control.setting('subtitles.utf') == 'true':
-                try:
-                    content_encoded = codecs.decode(content, codepage)
-                    content = codecs.encode(content_encoded, 'utf-8')
-                except:
-                    pass
-            file = control.openFile(subtitle, 'w')
-            file.write(content)
-            file.close()
-            #xbmc.sleep(1000)
-            control.sleep(1000)
-            xbmc.Player().setSubtitles(subtitle)
-            if control.setting('subtitles.notify') == 'true':
-                if xbmc.Player().isPlaying() and xbmc.Player().isPlayingVideo():
-                    control.execute('Dialog.Close(all,true)')
-                    #xbmc.sleep(3000)
-                    control.sleep(3000)
-                    control.infoDialog(subname, heading='{} subtitles downloaded'.format(str(lang).upper()), time=6000)
-        except:
-            pass
 
+		langs_ = 0
+
+		for lang in data_json:
+			try:
+				la = langDict[lang['language']]
+				
+				if la == self.language or la == self.secondary:
+
+					filename = lang['languageName'] + '-' + str(self.imdb_id) 
+
+					if self.media_type != 'movie':
+						filename += '_' + str(self.season) + '-' + str(self.episode)
+
+					filename += '_' + str(lang['id']) + '.' + lang['type']
+
+					subtitle = os.path.join(file_path, filename)
+
+					if not os.path.exists(subtitle):
+						try:
+							sub_url = 'https://proxy.wafflehacker.io/?destination=' + lang['url']
+							tt = su.get_link(sub_url)
+							if tt is not None:
+								file = openFile(subtitle, 'w')
+								file.write(tt)
+								file.close()
+						except:
+							pass
+					
+					if os.path.exists(subtitle):
+						langs_ += 1
+						self.setSubtitles(subtitle)
+			except:
+				continue
+		
+		if langs_ > 0:
+			self.subs_searched = True
+
+	def run_subtitles(self):
+		self.subs_searched = True
+		try: Thread(target=Subtitles().get, args=(self.title, self.imdb_id, self.season or None, self.episode or None)).start()
+		except: pass
+
+	def set_resume_point(self, listitem):
+		if self.playback_percent > 0.0: listitem.setProperty('StartPercent', str(self.playback_percent))
+
+	def info_next_ep(self):
+		self.nextep_info_gathered = True
+		try:
+			nextep_settings = auto_nextep_settings()
+			final_chapter = self.final_chapter() if nextep_settings['use_chapters'] else None
+			percentage = 100 - final_chapter if final_chapter else nextep_settings['window_percentage']
+			window_time = round((percentage/100) * self.total_time)
+			use_window = nextep_settings['alert_method'] == 0
+			default_action = nextep_settings['default_action']
+			self.start_prep = nextep_settings['scraper_time'] + window_time
+			self.nextep_settings = {'use_window': use_window, 'window_time': window_time, 'default_action': default_action, 'play_type': 'autoplay_nextep'}
+		except: pass
+
+	def final_chapter(self):
+		final_chapter = None
+		try:
+			final = float(get_infolabel('Player.Chapters').split(',')[-1])
+			if final >= 90: final_chapter = final
+		except: pass
+		return final_chapter
+
+	def kill_dialog(self):
+		try: self.sources_object._kill_progress_dialog()
+		except: close_all_dialog()
+
+	def set_constants(self, url, obj):
+		self.url = url
+		self.sources_object = obj
+		self.disable_lookup = disable_content_lookup()
+		self.is_generic = self.sources_object == 'video'
+		if not self.is_generic:
+			try:
+				self.has_subs = self.sources_object.has_subs
+				self.real_provider = self.sources_object.real_provider
+			except:
+				self.has_subs = False
+				self.real_provider = ''
+			self.meta = self.sources_object.meta
+			self.meta_get, self.kodi_monitor, self.playback_percent = self.meta.get, ku.monitor, self.sources_object.playback_percent or 0.0
+			self.monitor_playback, self.playing_filename = self.sources_object.monitor_playback, self.sources_object.playing_filename
+			self.media_marked, self.nextep_info_gathered, self.subs_searched = False, False, False
+			self.playback_successful, self.cancel_all_playback = None, False
+			self.set_watched, self.set_resume = playback_settings()
+
+	def set_playback_properties(self):
+		try:
+			trakt_ids = {'tmdb': self.tmdb_id, 'imdb': self.imdb_id, 'slug': make_trakt_slug(self.title)}
+			if self.media_type == 'episode': trakt_ids['tvdb'] = self.tvdb_id
+			set_property('script.trakt.ids', json.dumps(trakt_ids))
+			if self.playing_filename: set_property('subs.player_filename', self.playing_filename)
+		except: pass
+
+	def clear_playback_properties(self):
+		clear_property('fen.window_stack')
+		clear_property('script.trakt.ids')
+		clear_property('subs.player_filename')
+
+	def run_error(self):
+		try: self.sources_object.playback_successful = False
+		except: pass
+		self.clear_playback_properties()
+		notification(32121, 3500)
+		return False
+
+class Subtitles(xbmc_player):
+	def __init__(self):
+		xbmc_player.__init__(self)
+		self.os = OpenSubtitlesAPI()
+		self.auto_enable = get_setting('fen.subtitles.auto_enable')
+		self.subs_action = get_setting('fen.subtitles.subs_action')
+		self.language = get_setting('fen.subtitles.language_primary')
+		self.quality = ['bluray', 'hdrip', 'brrip', 'bdrip', 'dvdrip', 'webdl', 'webrip', 'webcap', 'web', 'hdtv', 'hdrip']
+		logger("self.auto_enable", str(self.auto_enable))
+	def get(self, query, imdb_id, season, episode, secondary_search=False):
+		def _notification(line, _time=3500):
+			return notification(line, _time)
+		def _video_file_subs():
+			try: available_sub_language = self.getSubtitles()
+			except: available_sub_language = ''
+			if available_sub_language == self.language:
+				if self.auto_enable == 'true': self.showSubtitles(True)
+				_notification(32852)
+				return True
+			return False
+		def _downloaded_subs():
+			files = list_dirs(subtitle_path)[1]
+			if len(files) > 0:
+				match_lang1 = None
+				match_lang2 = None
+				files = [i for i in files if i.endswith('.srt')]
+				for item in files:
+					if item == search_filename:
+						match_lang1 = item
+						break
+				final_match = match_lang1 or match_lang2 or None
+				if final_match:
+					subtitle = os.path.join(subtitle_path, final_match)
+					_notification(32792)
+					return subtitle
+			return False
+		def _searched_subs():
+			chosen_sub = None
+			result = self.os.search(query, imdb_id, self.language, season, episode)
+			if not result or len(result) == 0: return False
+			try: video_path = self.getPlayingFile()
+			except: video_path = ''
+			if '|' in video_path: video_path = video_path.split('|')[0]
+			video_path = os.path.basename(video_path)
+			if self.subs_action == '1':
+				self.pause()
+				choices = [i for i in result if i['SubLanguageID'] == self.language and i['SubSumCD'] == '1']
+				if len(choices) == 0: return False
+				dialog_list = ['[B]%s[/B] | [I]%s[/I]' % (i['SubLanguageID'].upper(), i['MovieReleaseName']) for i in choices]
+				list_items = [{'line1': item} for item in dialog_list]
+				kwargs = {'items': json.dumps(list_items), 'heading': video_path.replace('%20', ' '), 'enumerate': 'true', 'narrow_window': 'true'}
+				chosen_sub = select_dialog(choices, **kwargs)
+				self.pause()
+				if not chosen_sub: return False
+			else:
+				try: chosen_sub = [i for i in result if i['MovieReleaseName'].lower() in video_path.lower() and i['SubLanguageID'] == self.language and i['SubSumCD'] == '1'][0]
+				except: pass
+				if not chosen_sub:
+					fmt = re.split(r'\.|\(|\)|\[|\]|\s|\-', video_path)
+					fmt = [i.lower() for i in fmt]
+					fmt = [i for i in fmt if i in self.quality]
+					if season and fmt == '': fmt = 'hdtv'
+					result = [i for i in result if i['SubSumCD'] == '1']
+					filter = [i for i in result if i['SubLanguageID'] == self.language \
+												and any(x in i['MovieReleaseName'].lower() for x in fmt) and any(x in i['MovieReleaseName'].lower() for x in self.quality)]
+					if len(filter) > 0: chosen_sub = filter[0]
+					else: chosen_sub = result[0]
+			try: lang = convert_language(chosen_sub['SubLanguageID'])
+			except: lang = chosen_sub['SubLanguageID']
+			sub_format = chosen_sub['SubFormat']
+			final_filename = sub_filename + '_%s.%s' % (lang, sub_format)
+			download_url = chosen_sub['ZipDownloadLink']
+			temp_zip = os.path.join(subtitle_path, 'temp.zip')
+			temp_path = os.path.join(subtitle_path, chosen_sub['SubFileName'])
+			final_path = os.path.join(subtitle_path, final_filename)
+			subtitle = self.os.download(download_url, subtitle_path, temp_zip, temp_path, final_path)
+			sleep(1000)
+			return subtitle
+		if self.subs_action == '2': return
+		sleep(2500)
+		imdb_id = re.sub(r'[^0-9]', '', imdb_id)
+		subtitle_path = translate_path('special://temp/')
+		sub_filename = 'FENSubs_%s_%s_%s' % (imdb_id, season, episode) if season else 'FENSubs_%s' % imdb_id
+		search_filename = sub_filename + '_%s.srt' % self.language
+		subtitle = _video_file_subs()
+		if subtitle: return
+		subtitle = _downloaded_subs()
+		if subtitle: return self.setSubtitles(subtitle)
+		subtitle = _searched_subs()
+		if subtitle: return self.setSubtitles(subtitle)
+		if secondary_search: return _notification(32793)
+		secondary_language = get_setting('fen.subtitles.language_secondary')
+		if secondary_language in (self.language, None, 'None', ''): return _notification(32793)
+		self.language = secondary_language
+		self.get(query, imdb_id, season, episode, secondary_search=True)

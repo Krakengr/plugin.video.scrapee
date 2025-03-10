@@ -3,49 +3,23 @@
 import re
 import sys
 import gzip
-import random
-import time
-
 import requests
 import simplejson as json
 import six
 from six.moves import range as x_range, urllib_parse
 
-from resources.lib.modules import control
-from resources.lib.modules import dom_parser
-from resources.lib.modules import log_utils
+from http import cookiejar as cookielib
+from html import unescape
+import urllib.request as urllib2
+from io import StringIO
+from urllib.parse import urlparse, urljoin, quote, urlencode, quote_plus
+from urllib.response import addinfourl
+from urllib.error import HTTPError
+urlopen = urllib2.urlopen
+Request = urllib2.Request
 
-try: # Py2
-    from urlparse import urlparse, urljoin
-    from urllib import quote, urlencode, quote_plus, addinfourl
-    import cookielib
-    import urllib2
-    from cStringIO import StringIO
-    from HTMLParser import HTMLParser
-    unescape = HTMLParser().unescape
-    HTTPError = urllib2.HTTPError
-except ImportError: # Py3:
-    from http import cookiejar as cookielib
-    from html import unescape
-    import urllib.request as urllib2
-    from io import StringIO
-    from urllib.parse import urlparse, urljoin, quote, urlencode, quote_plus
-    from urllib.response import addinfourl
-    from urllib.error import HTTPError
-finally:
-    urlopen = urllib2.urlopen
-    Request = urllib2.Request
-
-if six.PY2:
-    _str = str
-    str = unicode
-    unicode = unicode
-    basestring = basestring
-    def bytes(b, encoding="ascii"):
-        return _str(b)
-elif six.PY3:
-    bytes = bytes
-    str = unicode = basestring = str
+bytes = bytes
+str = unicode = basestring = str
 
 
 #CERT_FILE = control.transPath('special://xbmc/system/certs/cacert.pem')
@@ -250,7 +224,8 @@ def request(url, close=True, redirect=True, error=False, verify=True, post=None,
             #log_utils.log('request-HTTPError (%s): %s' % (response.code, url))
             if response.code == 503:
                 if 'cf-browser-verification' in response.read(5242880):
-                    log_utils.log('client - url with cloudflare: ' + repr(url))
+                    pass
+                    #log_utils.log('client - url with cloudflare: ' + repr(url))
                     #log_utils.log('client - cfScrape Exception', 1)
                 elif error is False:
                     return

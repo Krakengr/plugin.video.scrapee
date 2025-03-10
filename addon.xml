@@ -1,20 +1,26 @@
-<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<addon id="plugin.video.scrapee" version="0.6" name="[COLOR orange]Scrapee[/COLOR]" provider-name="AkisMpo">
+<addon id="plugin.video.scrapee" name="Scrapee" provider-name="Akismpo" version="1.0">
     <requires>
-        <import addon="script.module.six" />
+        <import addon="xbmc.python" version="3.0.0"/>
+		<import addon="script.module.requests" version="2.31.0" />
+		<import addon="script.module.six" />
         <import addon="script.module.kodi-six" />
         <import addon="script.module.simplejson" />
-		<import addon="script.module.cloudscraper" optional="true" />
+		<import addon="script.module.resolveurl" version="5.0.00" optional="true" />
+		<import addon="script.module.pyxbmct" version="1.2.0" />
 		<import addon="plugin.video.youtube" optional="true" />
-		<import addon="script.scrubsv2.artwork" optional="true" />
     </requires>
-    <extension point="xbmc.python.pluginsource" library="default.py">
+    <extension library="resources/lib/scrapee.py" point="xbmc.python.pluginsource">
         <provides>video</provides>
     </extension>
-	<extension library="service.py" point="xbmc.service" start="startup" />
+    <extension library="resources/lib/service.py" point="xbmc.service"/>
+    <extension library="resources/lib/" point="xbmc.python.module"/>
     <extension point="xbmc.addon.metadata">
 		<news>
-			v 0.6 - 08.03.2024 - Fixed a bug in TV shows links. Added sync database in options menu.
+			v 1.0 - 27.02.2025 - New look and features. This version is based on Fen.
+			v 0.9 - 22.11.2024 - Overall Improvements &amp; Tweaks.
+			v 0.8 - 02.09.2024 - New features added. Fixed some bugs.
+			v 0.7 - 02.05.2024 - New features for TV section added. Tags added. Fixed a few TV section bugs.
+			v 0.6 - 08.03.2024 - Fixed a bug in TV shows links. Added -force- sync database in options menu.
 			v 0.5 - 29.02.2024 - Fixed a bug in the cache system. Added version check.
 			v 0.4 - 16.02.2024 - Added cfscrape for older versions of Kodi.
 			v 0.3 - 12.02.2024 - Changed json files to xml in link cache. Added service.py file for db sync.
@@ -23,20 +29,19 @@
 		</news>
 		<summary lang="el_GR">Scraper Ταινιών και Τηλεοπτικών Σειρών</summary>
 		<summary lang="en_US">Movies and TV Series Scraper</summary>
-		<description lang="el_GR">Αυτό το πρόγραμμα συλλέγει πληροφορίες από ιστοσελίδες που περιέχουν ταινίες ή/και σειρές με ελληνικούς και αγγλικούς υπότιτλους.</description>
-		<description lang="en_US">This program collects information from websites that contain movies and/or tv shows with Greek and English subtitles.</description>
-		<disclaimer>
-		</disclaimer>	
+		<description lang="el_GR">Αυτό το πρόγραμμα συλλέγει πληροφορίες από ιστοσελίδες που περιέχουν ταινίες ή/και σειρές με ελληνικούς ή/και αγγλικούς υπότιτλους.</description>
+		<description lang="en_US">This program collects information from websites that contain movies and/or tv shows with Greek and/or English subtitles.</description>
+		<disclaimer lang="el">Ο δημιουργός δεν φιλοξενεί ή διανέμει οποιαδήποτε από το περιεχόμενο που εμφανίζεται από αυτό το πρόσθετο και δεν έχει οποιαδήποτε σχέση με την ιστοσελίδα και τους ιδιοκτήτες αυτής.</disclaimer>
+		<disclaimer lang="en">The Scrapee's author does not host, stream or distribute any of the content displayed inside this plugin and does not have any relation with the website's owners.</disclaimer>
 		<platform>all</platform>
-		<license>http://www.gnu.org/licenses/</license>
+		<license>GNU GPL, version 2</license>
 		<forum></forum>
-		<website></website>    
-		<email></email>
-		<mainsource></mainsource>    
+		<website>https://akismpo.com/projects/my-plugin-tv-shows-and-movies-kodi/</website>    
+		<email>tsiomp@outlook.com</email>  
 		<source></source> 		
 		<assets>
-			<icon>resources/images/icon.png</icon>
-			<fanart>resources/images/back.jpg</fanart>
+			<icon>resources/media/icon.png</icon>
+			<fanart>resources/media/back.jpg</fanart>
 		</assets>
 	</extension>
 </addon>
