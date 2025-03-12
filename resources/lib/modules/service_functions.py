@@ -82,9 +82,9 @@ class FirstRunActions:
 		if get_setting('first_use', 'false') == 'true':
 			lines = ('By default, Scrapee has [B]Local Folders[/B], [B]Debrid Cloud[/B], [B]Furk[/B] and [B]Easynews[/B] scrapers.',
 			'These scrapers are designed for use on media you have purchased and organized through these services.',
-			'Scrapee is [B]unable[/B] to search online for sources outside of these services.',
-			'If you wish to use an external scraper package within Scrapee, you must select a module at[CR][B]Scrapee Settings->Providers->Choose External Scrapers Module.[/B]',
-			'The use of external scrapers is outside of the intended use of Scrapee, and will not be supported by Scrapee.')
+			'Scrapee can also search online for sources outside of these services, but you have to enable them at[CR][B]Scrapee Settings->Providers->Choose External Scrapers Module.[/B]',
+			'You can also use external scrapers. If you wish to use an external scraper package within Scrapee, you must select a module at[CR][B]Scrapee Settings->Provider Accounts.[/B]',
+			'The use of external scrapers will not be supported by Scrapee.')
 			for count, line in enumerate(lines, 1):
 				button_label = 'Finish' if count == 5 else 'Continue'
 				heading = '%s - %s/5.' % (ls(32522), count)

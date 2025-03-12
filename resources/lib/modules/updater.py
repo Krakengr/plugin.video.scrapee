@@ -4,7 +4,7 @@ import time
 import sqlite3 as database
 from zipfile import ZipFile
 from modules import kodi_utils 
-# logger = kodi_utils.logger
+logger = kodi_utils.logger
 
 requests, addon_info, unzip, confirm_dialog, ok_dialog = kodi_utils.requests, kodi_utils.addon_info, kodi_utils.unzip, kodi_utils.confirm_dialog, kodi_utils.ok_dialog
 translate_path, osPath, delete_file, execute_builtin = kodi_utils.translate_path, kodi_utils.osPath, kodi_utils.delete_file, kodi_utils.execute_builtin
@@ -16,7 +16,7 @@ home_addons_dir = translate_path('special://home/addons/')
 destination_check = translate_path('special://home/addons/plugin.video.scrapee/')
 
 def get_versions():
-	result = requests.get('https://github.com/Krakengr/plugin.video.scrapee/raw/main/packages/fen_version')
+	result = requests.get('https://raw.githubusercontent.com/Krakengr/plugin.video.scrapee/main/current_version.txt')
 	if result.status_code != 200: return
 	online_version = result.text.replace('\n', '')
 	current_version = addon_info('version')
@@ -25,6 +25,8 @@ def get_versions():
 def update_check(action=4):
 	if action == 3: return
 	current_version, online_version = get_versions()
+	logger("current_version", str(current_version))
+	logger("online_version", str(online_version))
 	line = ls(33177) % (current_version, online_version)
 	if current_version == online_version:
 		if action == 4: return ok_dialog(heading=33176, text=line + ls(33178))
@@ -38,8 +40,8 @@ def update_check(action=4):
 def update_addon(new_version, action):
 	close_all_dialog()
 	execute_builtin('ActivateWindow(Home)', True)
-	zip_name = 'plugin.video.scrapee-%s.zip' % new_version
-	url = 'https://github.com/Krakengr/plugin.video.scrapee//%s' % zip_name
+	zip_name = 'main.zip'
+	url = 'https://github.com/Krakengr/plugin.video.scrapee/archive/refs/heads/%s' % zip_name
 	result = requests.get(url, stream=True)
 	if result.status_code != 200: return ok_dialog(heading=33176, text=33183)
 	zip_location = osPath.join(packages_dir, zip_name)

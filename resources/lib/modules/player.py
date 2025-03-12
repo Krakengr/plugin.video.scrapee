@@ -243,16 +243,18 @@ class FenPlayer(xbmc_player):
 		EpisodeTools(self.meta).play_random_continual(False)
 
 	def get_subtitles(self):
-		self.language = get_setting('fen.subs.language_primary')
-		self.secondary = get_setting('fen.subs.language_secondary')
-		subtitle_path = get_setting('fen.subtitles_download_directory')
+		self.language = get_setting('fen.subtitles.language_primary')
+		self.secondary = get_setting('fen.subtitles.language_secondary')
+		subtitle_path = translate_path('special://temp/')
+		logger("subtitle_path", str(subtitle_path))
+		#subtitle_path = get_setting('fen.subtitles_download_directory')
 		home = xbmcaddon.Addon().getAddonInfo('path')
 		self.quality = ['bluray', 'hdrip', 'brrip', 'bdrip', 'dvdrip', 'webdl', 'webrip', 'webcap', 'web', 'hdtv', 'hdrip']
 		url = 'https://subs.whvx.net/search?id=' + str(self.imdb_id)
-		file_folder = 'resources/subtitles/'
-		file_path = os.path.join(home, file_folder)
-		subtitle_path = translate_path('special://temp/')
-		temp_zip = os.path.join(subtitle_path, 'temp.zip')
+		file_path = subtitle_path
+		#file_path = os.path.join(home, file_folder)
+		#file_folder = 'resources/subtitles/'
+		#temp_zip = os.path.join(subtitle_path, 'temp.zip')
 
 		if self.media_type != 'movie':
 			url += '&season=' + str(self.season) + '&episode=' + str(self.episode)
@@ -262,29 +264,29 @@ class FenPlayer(xbmc_player):
 		except:
 			return
 		
-		#Translate lang keys to Fen keys
+		#Translate lang keys from ISO 639-1 to ISO 639-2
 		langDict = {'af': 'afr', 'al': 'alb', 'ar': 'ara',
-                'Armenian': 'arm', 'Basque': 'baq', 'Bengali': 'ben',
-                'bs': 'bos', 'Breton': 'bre', 'bg': 'bul',
-                'Burmese': 'bur', 'Catalan': 'cat', 'Chinese': 'chi',
-                'hr': 'hrv', 'Czech': 'cze', 'Danish': 'dan',
-                'nl': 'dut', 'en': 'eng', 'Esperanto': 'epo',
-                'Estonian': 'est', 'Finnish': 'fin', 'French': 'fre',
-                'Galician': 'glg', 'Georgian': 'geo', 'German': 'ger',
-                'el': 'ell', 'Hebrew': 'heb', 'Hindi': 'hin',
-                'hu': 'hun', 'Icelandic': 'ice', 'id': 'ind',
-                'Italian': 'ita', 'Japanese': 'jpn', 'Kazakh': 'kaz',
-                'Khmer': 'khm', 'ko': 'kor', 'Latvian': 'lav',
-                'Lithuanian': 'lit', 'Luxembourgish': 'ltz', 'Macedonian': 'mac',
-                'Malay': 'may', 'Malayalam': 'mal', 'Manipuri': 'mni',
-                'Mongolian': 'mon', 'Montenegrin': 'mne', 'no': 'nor',
-                'Occitan': 'oci', 'Persian': 'per', 'pl': 'pol',
-                'Portuguese': 'por', 'pb': 'pob',
-                'ro': 'rum', 'ru': 'rus', 'Serbian': 'scc',
-                'Sinhalese': 'sin', 'sk': 'slo', 'sl': 'slv',
-                'es': 'spa', 'Swahili': 'swa', 'Swedish': 'swe',
-                'Syriac': 'syr', 'Tagalog': 'tgl', 'Tamil': 'tam', 'Telugu': 'tel',
-                'Thai': 'tha', 'tr': 'tur', 'Ukrainian': 'ukr', 'Urdu': 'urd'
+                'hy': 'arm', 'eu': 'baq', 'bn': 'ben',
+                'bs': 'bos', 'br': 'bre', 'bg': 'bul',
+                'my': 'bur', 'ca': 'cat', 'zh': 'chi',
+                'hr': 'hrv', 'cs': 'cze', 'da': 'dan',
+                'nl': 'dut', 'en': 'eng', 'eo': 'epo',
+                'et': 'est', 'fi': 'fin', 'fr': 'fre',
+                'gl': 'glg', 'ka': 'geo', 'de': 'ger',
+                'el': 'ell', 'he': 'heb', 'hi': 'hin',
+                'hu': 'hun', 'is': 'ice', 'id': 'ind',
+                'it': 'ita', 'ja': 'jpn', 'kk': 'kaz',
+                'km': 'khm', 'ko': 'kor', 'lv': 'lav',
+                'lt': 'lit', 'lb': 'ltz', 'mk': 'mac',
+                'ms': 'may', 'ml': 'mal', 'mn': 'mni',
+                'mn': 'mon', 'mo': 'mne', 'no': 'nor',
+                'oc': 'oci', 'fa': 'per', 'pl': 'pol',
+                'pt': 'por', 'pb': 'pob',
+                'ro': 'rum', 'ru': 'rus', 'sr': 'scc',
+                'si': 'sin', 'sk': 'slo', 'sl': 'slv',
+                'es': 'spa', 'sw': 'swa', 'sv': 'swe',
+                'syr': 'syr', 'tl': 'tgl', 'ta': 'tam', 'te': 'tel',
+                'th': 'tha', 'tr': 'tur', 'ua': 'ukr', 'ur': 'urd'
             }
 
 		langs_ = 0

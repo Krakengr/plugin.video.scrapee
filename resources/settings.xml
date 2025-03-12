@@ -200,6 +200,7 @@
 				</setting>
 			</group>
 			<!-- Subtitles -->
+			<!--
 			<group id="6" label="32182">
 				<setting id="subs.language_primary" type="string" label="32184" help="">
 					<level>0</level>
@@ -215,7 +216,7 @@
 						<data>RunPlugin(plugin://plugin.video.scrapee/?mode=set_language_filter_choice&amp;filter_setting=subtitles.language_secondary&amp;include_none=true)</data>
 					</control>
 				</setting>
-			</group>
+			</group>-->
 			<!--Downloads -->
 			<group id="7" label="32107">
 				<setting id="movie_download_directory" type="path" label="32116" help="">
@@ -257,7 +258,7 @@
 					<control type="button" format="path">
 						<heading>33005</heading>
 					</control>
-				</setting>
+				</setting><!--
 				<setting id="subtitles_download_directory" type="path" label="33221" help="">
 					<level>0</level>
 					<default>special://profile/addon_data/plugin.video.scrapee/Subtitle Downloads/</default>
@@ -267,7 +268,7 @@
 					<control type="button" format="path">
 						<heading>33221</heading>
 					</control>
-				</setting>
+				</setting>-->
 			</group>
 		</category>
 		<!-- Features -->

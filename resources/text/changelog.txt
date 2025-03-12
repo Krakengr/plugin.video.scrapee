@@ -1,3 +1,4 @@
+v 1.0 - 27.02.2025 - New look and features. This version is based on Fen.
 v 0.9 - 22.11.2024 - Overall Improvements &amp; Tweaks.
 v 0.8 - 02.09.2024 - New features added. Fixed some bugs.
 v 0.7 - 02.05.2024 - New features for TV section added. Tags added. Fixed a few TV section bugs.

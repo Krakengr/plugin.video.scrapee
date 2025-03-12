@@ -294,7 +294,13 @@ class NavigatorCache:
 		return prop_dict[list_type]
 
 	def _connect_database(self):
-		self.dbcon = database.connect(navigator_db, timeout=timeout, isolation_level=None)
+		try:
+			self.dbcon = database.connect(navigator_db, timeout=timeout, isolation_level=None)
+		except:
+			from caches.base_cache import check_databases
+			check_databases()
+			self.dbcon = database.connect(navigator_db, timeout=timeout, isolation_level=None)
+
 
 	def _set_PRAGMAS(self):
 		self.dbcur = self.dbcon.cursor()

@@ -1827,7 +1827,7 @@ msgid "Keywords"
 msgstr ""
 
 msgctxt "#32658"
-msgid "Language"
+msgid "Languagesss"
 msgstr ""
 
 msgctxt "#32659"
@@ -3959,123 +3959,11 @@ msgid "Coverapi"
 msgstr ""
 
 msgctxt "#33192"
-msgid "Enable CoverApi Scraper"
+msgid "[I]Manage Folders at Tools->Accounts Manager[/I]"
 msgstr ""
 
 msgctxt "#33193"
-msgid "Enable this if you want to search for content on coverapi.store list (Greek subtitles, low quality)."
-msgstr ""
-
-msgctxt "#33194"
-msgid "Gamato"
-msgstr ""
-
-msgctxt "#33195"
-msgid "Enable Gamato Scraper"
-msgstr ""
-
-msgctxt "#33196"
-msgid "Enable this if you want to search for content on gamatomovies.info list (Greek subtitles, low quality)."
-msgstr ""
-
-msgctxt "#33197"
-msgid "Greek-Movies"
-msgstr ""
-
-msgctxt "#33198"
-msgid "Enable Greek-Movies Scraper"
-msgstr ""
-
-msgctxt "#33199"
-msgid "Enable this if you want to search for content on greek-movies.com list (Greek subtitles, low quality, StreamDB API key needed for this scraper to work)."
-msgstr ""
-
-msgctxt "#33200"
-msgid "ErtFlix"
-msgstr ""
-
-msgctxt "#33201"
-msgid "Enable ErtFlix Scraper"
-msgstr ""
-
-msgctxt "#33202"
-msgid "Enable this if you want to search for content on ErtFlix list (Greek subtitles, High quality, StreamDB API key needed for this scraper to work)."
-msgstr ""
-
-msgctxt "#33203"
-msgid "Torrents"
-msgstr ""
-
-msgctxt "#33204"
-msgid "Enable Torrents Scraper"
-msgstr ""
-
-msgctxt "#33205"
-msgid "Enable this if you want to search for content on torrents. This option will search thepiratebay via proxy and then it will stream the content via webtor.io."
-msgstr ""
-
-msgctxt "#33206"
-msgid "AutoEmbed"
-msgstr ""
-
-msgctxt "#33207"
-msgid "Enable AutoEmbed Scraper"
-msgstr ""
-
-msgctxt "#33208"
-msgid "Enable this if you want to search for content on AutoEmbed site (Good quality)."
-msgstr ""
-
-msgctxt "#33209"
-msgid "StreamDB"
-msgstr ""
-
-msgctxt "#33210"
-msgid "Limit Torrent Results"
-msgstr ""
-
-msgctxt "#33211"
-msgid "Reduce this option if scraping takes a lot of time to complete."
-msgstr ""
-
-msgctxt "#33212"
-msgid "One link per movie/episode"
-msgstr ""
-
-msgctxt "#33213"
-msgid "Two links per movie/episode"
-msgstr ""
-
-msgctxt "#33214"
-msgid "Three links per movie/episode"
-msgstr ""
-
-msgctxt "#33215"
-msgid "Sync Database"
-msgstr ""
-
-msgctxt "#33216"
-msgid "Choose how scrapee will sync the database"
-msgstr ""
-
-msgctxt "#33217"
-msgid "Manually"
-msgstr ""
-
-msgctxt "#33218"
-msgid "Sync Database on Startup"
-msgstr ""
-
-msgctxt "#33219"
-msgid "Sync Database on Startup (Silent)"
-msgstr ""
-
-msgctxt "#33220"
-msgid "Syncing Database"
-msgstr ""
-
-msgctxt "#33221"
-msgid "Subtitles Files Directory"
+msgid "Become a VIP member at fanart.tv for many benefits"
 msgstr ""
 
 ###################################################################################################################################
