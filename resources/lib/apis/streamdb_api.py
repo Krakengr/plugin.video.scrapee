@@ -1,10 +1,9 @@
 # -*- coding: utf-8 -*-
 import time
 from modules import settings, source_utils, kodi_utils, watched_status
-from caches.favorites_cache import favorites
+from caches import favorites_cache
 logger = kodi_utils.logger
-
-CLIENT_ID = settings.streamdb_api_key()
+client_id = str(settings.streamdb_api_key())
 sync_method = settings.database_sync()
 json = kodi_utils.json
 watched_db, favorites_db = kodi_utils.watched_db, kodi_utils.favorites_db
@@ -23,7 +22,7 @@ delete_favorites_url = '&action=remove-favorites'
 timeout = 20
 
 def sync_databases():
-    if CLIENT_ID == '' or sync_method == 0:
+    if client_id == '' or sync_method == 0:
         return
     syncfavorites()
     syncfavorites('tv')
@@ -37,16 +36,16 @@ def sync_databases():
     pass
 
 def syncbookmarks(type = 'movie', sync_type = 'progress'):
-    if CLIENT_ID == '' or sync_method == 0:
+    if client_id == '' or sync_method == 0:
         return
     
     type = 'movie' if type == 'movie' else 'tv'
 
     try:
         if sync_type == 'progress':
-            data_link = 'https://streamdb.homebrewgr.info/index.php?action=get-sync-data&do=bookmarks&api_key=%s&type=%s' % (CLIENT_ID, type)
+            data_link = 'https://streamdb.homebrewgr.info/index.php?action=get-sync-data&do=bookmarks&api_key=%s&type=%s' % (client_id, type)
         elif sync_type == 'watched':
-            data_link = 'https://streamdb.homebrewgr.info/index.php?action=get-sync-data&do=watchlist&api_key=%s&type=%s' % (CLIENT_ID, type)
+            data_link = 'https://streamdb.homebrewgr.info/index.php?action=get-sync-data&do=watchlist&api_key=%s&type=%s' % (client_id, type)
         
         if type == 'tv':
             type = 'episode'
@@ -71,13 +70,13 @@ def syncbookmarks(type = 'movie', sync_type = 'progress'):
         return
     
 def syncfavorites(type = 'movie'):
-    if CLIENT_ID == '' or sync_method == 0:
+    if client_id == '' or sync_method == 0:
         return
 
     type = 'movie' if type == 'movie' else 'tv'
 
     try:
-        data_link = 'https://streamdb.homebrewgr.info/index.php?action=get-sync-data&do=favorites&api_key=%s&type=%s' % (CLIENT_ID, type)
+        data_link = 'https://streamdb.homebrewgr.info/index.php?action=get-sync-data&do=favorites&api_key=%s&type=%s' % (client_id, type)
         content = source_utils.get_link(data_link)
         data_json = json.loads(content)
 
@@ -85,21 +84,21 @@ def syncfavorites(type = 'movie'):
             type = 'tvshow'
 
         if 'status' in data_json and data_json["status"] == "OK" and 'data' in data_json and len(data_json["data"]) > 0:
-            favorites.clear_favorites(type)
+            favorites_cache.favorites().clear_favorites(type)
 
             for item in data_json["data"]:
-                favorites.set_favourite(type, item["tmdb_id"], item["title"], True)
+                favorites_cache.favorites().set_favourite(type, item["tmdb_id"], item["title"], True)
     except:
         return
     
 def mark_unwatched_status(media_type, tmdb_id, season, episode):
-    if CLIENT_ID == '':
+    if client_id == '':
         return
     
     media_type = 'movie' if media_type == 'movie' else 'tv'
 
     try:
-        url = API_ENDPOINT % CLIENT_ID
+        url = API_ENDPOINT % client_id
         url += set_unwatched_url % (tmdb_id, media_type, season, episode, 'watched')
         logger("url", url)
         source_utils.get_link(url)
@@ -107,13 +106,13 @@ def mark_unwatched_status(media_type, tmdb_id, season, episode):
         pass
 
 def mark_watched_status(media_type, tmdb_id, season, episode, last_played, title):
-    if CLIENT_ID == '':
+    if client_id == '':
         return
     
     media_type = 'movie' if media_type == 'movie' else 'tv'
 
     try:
-        url = API_ENDPOINT % CLIENT_ID
+        url = API_ENDPOINT % client_id
         url += set_watched_url % (tmdb_id, last_played, media_type, title, season, episode, 'watched')
         logger("url", url)
         source_utils.get_link(url)
@@ -121,13 +120,13 @@ def mark_watched_status(media_type, tmdb_id, season, episode, last_played, title
         pass
 
 def delete_favourites(media_type, tmdb_id):
-    if CLIENT_ID == '':
+    if client_id == '':
         return
     
     media_type = 'movie' if media_type == 'movie' else 'tv'
 
     try:
-        url = API_ENDPOINT % CLIENT_ID
+        url = API_ENDPOINT % client_id
         url += delete_favorites_url % (tmdb_id, media_type)
         logger("url", url)
         source_utils.get_link(url)
@@ -135,13 +134,13 @@ def delete_favourites(media_type, tmdb_id):
         pass
 
 def delete_favourite(media_type, tmdb_id):
-    if CLIENT_ID == '':
+    if client_id == '':
         return
     
     media_type = 'movie' if media_type == 'movie' else 'tv'
 
     try:
-        url = API_ENDPOINT % CLIENT_ID
+        url = API_ENDPOINT % client_id
         url += delete_favorite_url % (tmdb_id, media_type)
         logger("url", url)
         source_utils.get_link(url)
@@ -149,21 +148,33 @@ def delete_favourite(media_type, tmdb_id):
         pass
 
 def set_favourite(media_type, tmdb_id, title):
-    if CLIENT_ID == '':
+    if client_id == '':
         return
     
     media_type = 'movie' if media_type == 'movie' else 'tv'
 
     try:
-        url = API_ENDPOINT % CLIENT_ID
+        url = API_ENDPOINT % client_id
         url += set_favorite_url % (tmdb_id, media_type, title)
         logger("url", url)
         source_utils.get_link(url)
     except:
         pass
 
+def set_sync_bookmark(media_type, tmdb_id, season, episode, resume_point, curr_time, last_played, title):
+    if client_id == '':
+        return
+
+    try:
+        url = API_ENDPOINT % client_id
+        url += set_bookmark_url % (tmdb_id, curr_time, 0, media_type, season, episode, title, last_played, resume_point)
+        logger("url", url)
+        source_utils.get_link(url)
+    except:
+        pass
+
 def set_bookmark(params, last_played):
-    if CLIENT_ID == '':
+    if client_id == '':
         return
     
     media_type, tmdb_id, curr_time, total_time = params.get('media_type'), params.get('tmdb_id'), params.get('curr_time'), params.get('total_time')
@@ -173,7 +184,7 @@ def set_bookmark(params, last_played):
     media_type = 'movie' if media_type == 'movie' else 'tv'
 
     try:
-        url = API_ENDPOINT % CLIENT_ID
+        url = API_ENDPOINT % client_id
         url += set_bookmark_url % (tmdb_id, curr_time, total_time, media_type, season, episode, title, last_played, resume_point)
         logger("url", url)
         source_utils.get_link(url)
@@ -181,13 +192,13 @@ def set_bookmark(params, last_played):
         pass
 
 def erase_bookmark(media_type, tmdb_id, season, episode):
-    if CLIENT_ID == '':
+    if client_id == '':
         return
     
     media_type = 'movie' if media_type == 'movie' else 'tv'
 
     try:
-        url = API_ENDPOINT % CLIENT_ID
+        url = API_ENDPOINT % client_id
         url += delete_bookmark_url % (tmdb_id, media_type, season, episode)
         logger("url", url)
         source_utils.get_link(url)
@@ -195,11 +206,11 @@ def erase_bookmark(media_type, tmdb_id, season, episode):
         pass
 
 def erase_bookmarks():
-    if CLIENT_ID == '':
+    if client_id == '':
         return
     
     try:
-        url = API_ENDPOINT % CLIENT_ID
+        url = API_ENDPOINT % client_id
         url += delete_bookmarks_url
         logger("url", url)
         source_utils.get_link(url)

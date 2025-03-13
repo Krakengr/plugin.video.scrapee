@@ -168,11 +168,23 @@ def set_sync_bookmark(media_type, tmdb_id, season, episode, resume_point, curr_t
 	
 	dbcur.execute("INSERT OR REPLACE INTO progress VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
 		(media_type, tmdb_id, int(season), int(episode), str(resume_point), str(curr_time), last_played, 0, title))
+	
+	try:
+		media_type = 'movie' if media_type == 'movie' else 'tv'
+		streamdb_api.set_sync_bookmark(media_type, tmdb_id, season, episode, resume_point, curr_time, last_played, title)
+	except:
+		pass
 
 def set_sync_watched(media_type, tmdb_id, season, episode, last_played, title):
 	dbcon = make_database_connection(get_database())
 	dbcur = set_PRAGMAS(dbcon)
 	dbcur.execute("INSERT OR REPLACE INTO watched_status VALUES (?, ?, ?, ?, ?, ?)", (media_type, tmdb_id, season, episode, last_played, title))
+
+	try:
+		media_type = 'movie' if media_type == 'movie' else 'tv'
+		streamdb_api.mark_watched_status(media_type, tmdb_id, season, episode, last_played, title)
+	except:
+		pass
 
 def set_bookmark(params):
 	try:
@@ -341,6 +353,7 @@ def mark_tvshow(params):
 	except: tvdb_id = 0
 	watched_indicators = watched_indicators_function()
 	heading = watched_str if action == 'mark_as_watched' else unwatched_str
+	logger("mark_tvshow", action)
 	if watched_indicators == 1:
 		if not trakt_watched_status_mark(action, 'shows', tmdb_id, tvdb_id): return notification(32574)
 		clear_trakt_collection_watchlist_data('watchlist', 'tvshow')

@@ -197,6 +197,9 @@ def database_sync():
 def subtitles_download_directory():
 	return get_setting('subtitles_download_directory')
 
+def streamdb_api_key():
+	return get_setting('fen.streamdb_api', '')
+
 def furk_active():
 	if get_setting('fen.provider.furk', 'false') == 'true':
 		if not get_setting('fen.furk_api_key'):
@@ -322,9 +325,6 @@ def scraping_settings():
 def get_art_provider():
 	if not get_fanart_data(): return default_art_provider_tuple
 	return art_provider_dict[fanarttv_default()]
-
-def streamdb_api_key():
-	return get_setting('fen.streamdb_api', '')
 
 def omdb_api_key():
 	return get_setting('fen.omdb_api', '')

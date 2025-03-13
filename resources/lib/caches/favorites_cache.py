@@ -16,7 +16,7 @@ class Favorites:
 		self.make_database_connection()
 		self.set_PRAGMAS()
 
-	def set_favourite(self, media_type, tmdb_id, title, from_sync = False):
+	def set_favourite(self, media_type, tmdb_id, title, from_sync = False):		
 		if from_sync is False:
 			try:
 				streamdb_api.set_favourite(media_type, tmdb_id, title)
