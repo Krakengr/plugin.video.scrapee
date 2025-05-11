@@ -38,18 +38,17 @@ class source:
 		self.imdb   = imdb
 		self.season   = season
 		self.episode   = episode
-		url = 'https://proxy.wafflehacker.io/?destination=https://knaben.xyz/thepiratebay/s/?q=' + title.replace(" ", "+")
-				
+		#url = 'https://proxy.wafflehacker.io/?destination=https://knaben.xyz/thepiratebay/s/?q=' + title.replace(" ", "+")
+		url = 'https://knaben.xyz/thepiratebay/s/?q=' + title.replace(" ", "+")
+
 		if (self.type == 'movie'):
 			cache = self.links.get_link(self.type, self.imdb, expires, self.scrape_provider)
-			#https://1337x.to/category-search/The%20Brutalist%202024/Movies/1/
 			category = '201'
 			if year > 0:
 				url += '+(' + str(year) + ')'
 		else:
 			self.type = 'tv'
 			cache = self.links.get_link(self.type, self.imdb, expires, self.scrape_provider, self.season, self.episode )
-			#https://1337x.to/category-search/The%20Brutalist%202024/TV/1/
 			#208 = HD TV SHOWS
 			category = '205'
 			url += '+S' + self.make_nums(self.season) + 'E' + self.make_nums(self.episode)
